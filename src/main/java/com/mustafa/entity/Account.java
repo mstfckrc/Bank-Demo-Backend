@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Entity
 @Table(name = "accounts")
@@ -35,16 +36,16 @@ public class Account {
     // İLİŞKİ: Her hesabın mutlak bir sahibi (Müşterisi) olmak zorundadır
     // Performans için veritabanından hesap çekilirken müşteriyi hemen getirme (LAZY)
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "customer_id", nullable = false)
-    private Customer customer;
+    @JoinColumn(name = "app_user_id", nullable = false)
+    private AppUser appUser;
 
     // Bu hesaptan çıkan paralar (Gönderilenler)
     @OneToMany(mappedBy = "senderAccount")
-    private java.util.List<Transaction> sentTransactions;
+    private List<Transaction> sentTransactions;
 
     // Bu hesaba giren paralar (Alınanlar)
     @OneToMany(mappedBy = "receiverAccount")
-    private java.util.List<Transaction> receivedTransactions;
+    private List<Transaction> receivedTransactions;
 
     // ... mevcut kodların (iban, balance vb.) altına ekle ...
 

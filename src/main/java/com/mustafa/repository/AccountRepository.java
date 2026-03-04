@@ -11,8 +11,11 @@ public interface AccountRepository extends JpaRepository<Account, Long> {
 
     Optional<Account> findByIban(String iban);
 
-    // Belirli bir müşterinin tüm hesaplarını listelemek için (Profil sayfasında gerekecek)
-    List<Account> findByCustomerId(Long customerId);
+    // Artık hesabı Customer ID'sine göre değil, AppUser ID'sine göre arıyoruz
+    List<Account> findByAppUserId(Long appUserId);
+
+    // Veya direkt kimlik numarasıyla bulmak için (Servislerde çok işimize yarayacak)
+    List<Account> findByAppUser_IdentityNumber(String identityNumber);
 
     boolean existsByAccountNumber(String accountNumber);
 

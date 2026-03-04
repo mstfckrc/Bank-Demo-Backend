@@ -4,6 +4,7 @@ import com.mustafa.dto.request.DepositRequest;
 import com.mustafa.dto.request.TransferRequest;
 import com.mustafa.dto.response.TransactionResponse;
 import com.mustafa.entity.Account;
+import com.mustafa.entity.AppUser;
 import com.mustafa.entity.Transaction;
 import com.mustafa.exception.BankOperationException;
 import com.mustafa.repository.AccountRepository;
@@ -41,12 +42,15 @@ public class TransactionServiceImpl implements TransactionService {
         Account account = accountRepository.findByIban(request.getIban())
                 .orElseThrow(() -> new BankOperationException("Hesap bulunamadı!"));
 
-        String currentTcNo = SecurityContextHolder.getContext().getAuthentication().getName();
-        if (!account.getCustomer().getTcNo().equals(currentTcNo)) {
+        String currentIdentity = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        // 🚀 CUSTOMER YERİNE APPUSER (KİMLİK) KONTROLÜ
+        if (!account.getAppUser().getIdentityNumber().equals(currentIdentity)) {
             throw new BankOperationException("Sadece kendi hesaplarınıza para yatırabilirsiniz!");
         }
 
-        if (account.getCustomer().getStatus() != com.mustafa.entity.Customer.ApprovalStatus.APPROVED) {
+        // 🚀 CUSTOMER YERİNE APPUSER (ONAY) KONTROLÜ
+        if (account.getAppUser().getStatus() != AppUser.ApprovalStatus.APPROVED) {
             throw new BankOperationException("Hesabınız onaylı olmadığı için para yatırma işlemi yapamazsınız. Lütfen durumunuzu kontrol ediniz.");
         }
 
@@ -62,7 +66,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .receiverAccount(account)
                 .amount(request.getAmount())
                 .transactionType(Transaction.TransactionType.DEPOSIT)
-                .status(Transaction.TransactionStatus.COMPLETED) // Direkt onaylı
+                .status(Transaction.TransactionStatus.COMPLETED)
                 .description("Kendi Hesabına Para Yatırma")
                 .build();
 
@@ -80,12 +84,14 @@ public class TransactionServiceImpl implements TransactionService {
         Account receiverAccount = accountRepository.findByIban(request.getReceiverIban())
                 .orElseThrow(() -> new BankOperationException("Alıcı hesap bulunamadı!"));
 
-        String currentTcNo = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getName();
-        if (!senderAccount.getCustomer().getTcNo().equals(currentTcNo)) {
+        String currentIdentity = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        // 🚀 CUSTOMER YERİNE APPUSER KONTROLLERİ
+        if (!senderAccount.getAppUser().getIdentityNumber().equals(currentIdentity)) {
             throw new BankOperationException("Sadece kendi hesaplarınızdan para transferi yapabilirsiniz!");
         }
 
-        if (senderAccount.getCustomer().getStatus() != com.mustafa.entity.Customer.ApprovalStatus.APPROVED) {
+        if (senderAccount.getAppUser().getStatus() != AppUser.ApprovalStatus.APPROVED) {
             throw new BankOperationException("Hesabınız onaylı olmadığı için para transferi gerçekleştiremezsiniz. Lütfen durumunuzu kontrol ediniz.");
         }
 
@@ -105,10 +111,10 @@ public class TransactionServiceImpl implements TransactionService {
             throw new BankOperationException("İşlem yapılacak hesaplardan biri kapalıdır!");
         }
 
-        // 1. Gönderenden parayı DÜŞ (Para hesaptan her türlü çıkar, bloke olur)
+        // 1. Gönderenden parayı DÜŞ
         senderAccount.setBalance(senderAccount.getBalance().subtract(request.getAmount()));
 
-        // 2. Canlı Kur Çevirimi (Admin onayladığında alıcıya ne kadar ekleneceğini şimdiden hesaplıyoruz)
+        // 2. Canlı Kur Çevirimi
         Double convertedAmountDouble = currencyService.convertAmount(
                 request.getAmount().doubleValue(),
                 senderAccount.getCurrency().toString(),
@@ -116,16 +122,12 @@ public class TransactionServiceImpl implements TransactionService {
         );
         BigDecimal convertedAmount = BigDecimal.valueOf(convertedAmountDouble);
 
-        // ... Üst kısımlar aynı (Canlı Kur Çevirimi vb.) ...
-
         String enrichedDescription = request.getDescription() +
                 " (Çevrim: " + request.getAmount() + " " + senderAccount.getCurrency() +
                 " -> " + String.format("%.2f", convertedAmountDouble) + " " + receiverAccount.getCurrency() + ")";
 
-        // 🚀 3. MASAK KONTROLÜ (GÜNCELLENDİ: Çoklu Para Birimi Desteği)
+        // 3. MASAK KONTROLÜ (Aynen Korundu)
         Transaction.TransactionStatus status;
-
-        // İşlem tutarının o anki kurdan TRY (TL) karşılığını buluyoruz!
         Double amountInTryDouble = currencyService.convertAmount(
                 request.getAmount().doubleValue(),
                 senderAccount.getCurrency().toString(),
@@ -133,16 +135,11 @@ public class TransactionServiceImpl implements TransactionService {
         );
         BigDecimal amountInTry = BigDecimal.valueOf(amountInTryDouble);
 
-        // Artık kıyaslamayı gönderilen orijinal tutarla değil, TL karşılığıyla (amountInTry) yapıyoruz.
         if (amountInTry.compareTo(TRANSACTION_LIMIT) >= 0) {
-            // TL karşılığı 50.000 ve üstüyse: Alıcıya EKLEME, Onaya Gönder
             accountRepository.save(senderAccount);
             status = Transaction.TransactionStatus.PENDING_APPROVAL;
-
-            // Açıklamaya kur bilgisini de ekleyelim ki admin neyi onayladığını bilsin
             enrichedDescription += String.format(" - [YÜKLÜ İŞLEM: Yaklaşık %.2f TL - YÖNETİCİ ONAYI BEKLİYOR]", amountInTryDouble);
         } else {
-            // TL karşılığı 50.000 altındaysa: Alıcıya EKLE ve direkt Onayla
             receiverAccount.setBalance(receiverAccount.getBalance().add(convertedAmount));
             accountRepository.save(senderAccount);
             accountRepository.save(receiverAccount);
@@ -157,23 +154,21 @@ public class TransactionServiceImpl implements TransactionService {
                 .amount(request.getAmount())
                 .convertedAmount(convertedAmount)
                 .transactionType(Transaction.TransactionType.TRANSFER)
-                .status(status) // 🚀 Belirlenen statüyü atadık
+                .status(status)
                 .description(enrichedDescription)
                 .build();
 
         transactionRepository.save(transaction);
-
         return mapToResponse(transaction);
     }
 
     @Override
     public List<TransactionResponse> getAccountTransactions(String accountNumber, String type, String startDate, String endDate) {
-
         Account account = accountRepository.findByAccountNumber(accountNumber)
                 .orElseThrow(() -> new BankOperationException("Hesap bulunamadı!"));
 
-        String currentTcNo = SecurityContextHolder.getContext().getAuthentication().getName();
-        if (!account.getCustomer().getTcNo().equals(currentTcNo)) {
+        String currentIdentity = SecurityContextHolder.getContext().getAuthentication().getName();
+        if (!account.getAppUser().getIdentityNumber().equals(currentIdentity)) {
             throw new BankOperationException("Sadece kendi hesaplarınızın hareketlerini görebilirsiniz!");
         }
 
@@ -185,12 +180,10 @@ public class TransactionServiceImpl implements TransactionService {
         if (type != null && !type.isBlank()) {
             stream = stream.filter(t -> t.getTransactionType().name().equalsIgnoreCase(type));
         }
-
         if (startDate != null && !startDate.isBlank()) {
             LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
             stream = stream.filter(t -> !t.getTransactionDate().isBefore(start));
         }
-
         if (endDate != null && !endDate.isBlank()) {
             LocalDateTime end = LocalDate.parse(endDate).atTime(23, 59, 59);
             stream = stream.filter(t -> !t.getTransactionDate().isAfter(end));
@@ -199,17 +192,15 @@ public class TransactionServiceImpl implements TransactionService {
         return stream.map(this::mapToResponse).collect(Collectors.toList());
     }
 
-    // --- YENİ EKLENEN ADMİN METOTLARI ---
+    // --- ADMİN METOTLARI (Değişiklik yok, doğrudan Transaction ve Account üzerinden çalışıyor) ---
 
     @Override
     public List<TransactionResponse> getAllTransactionsForAdmin(String status) {
         Stream<Transaction> stream = transactionRepository.findAll().stream()
                 .sorted((t1, t2) -> t2.getTransactionDate().compareTo(t1.getTransactionDate()));
-
         if (status != null && !status.isBlank()) {
             stream = stream.filter(t -> t.getStatus().name().equalsIgnoreCase(status));
         }
-
         return stream.map(this::mapToResponse).collect(Collectors.toList());
     }
 
@@ -218,21 +209,15 @@ public class TransactionServiceImpl implements TransactionService {
     public TransactionResponse approveTransaction(String referenceNo) {
         Transaction transaction = transactionRepository.findByReferenceNo(referenceNo)
                 .orElseThrow(() -> new BankOperationException("İşlem bulunamadı!"));
-
         if (transaction.getStatus() != Transaction.TransactionStatus.PENDING_APPROVAL) {
             throw new BankOperationException("Bu işlem onay bekleyen statüde değil!");
         }
-
-        // Parayı alıcıya geçiriyoruz
         Account receiver = transaction.getReceiverAccount();
         receiver.setBalance(receiver.getBalance().add(transaction.getConvertedAmount()));
         accountRepository.save(receiver);
-
-        // Statüyü ve açıklamayı güncelle
         transaction.setStatus(Transaction.TransactionStatus.COMPLETED);
         String updatedDesc = transaction.getDescription().replace(" - [YÜKLÜ İŞLEM: YÖNETİCİ ONAYI BEKLİYOR]", "") + " - [ONAYLANDI]";
         transaction.setDescription(updatedDesc);
-
         transactionRepository.save(transaction);
         return mapToResponse(transaction);
     }
@@ -242,21 +227,15 @@ public class TransactionServiceImpl implements TransactionService {
     public TransactionResponse rejectTransaction(String referenceNo) {
         Transaction transaction = transactionRepository.findByReferenceNo(referenceNo)
                 .orElseThrow(() -> new BankOperationException("İşlem bulunamadı!"));
-
         if (transaction.getStatus() != Transaction.TransactionStatus.PENDING_APPROVAL) {
             throw new BankOperationException("Bu işlem onay bekleyen statüde değil!");
         }
-
-        // İADE İŞLEMİ: Bloke edilen parayı gönderene geri ver
         Account sender = transaction.getSenderAccount();
         sender.setBalance(sender.getBalance().add(transaction.getAmount()));
         accountRepository.save(sender);
-
-        // Statüyü ve açıklamayı güncelle
         transaction.setStatus(Transaction.TransactionStatus.REJECTED);
         String updatedDesc = transaction.getDescription().replace(" - [YÜKLÜ İŞLEM: YÖNETİCİ ONAYI BEKLİYOR]", "") + " - [REDDEDİLDİ VE İADE EDİLDİ]";
         transaction.setDescription(updatedDesc);
-
         transactionRepository.save(transaction);
         return mapToResponse(transaction);
     }
@@ -267,15 +246,11 @@ public class TransactionServiceImpl implements TransactionService {
                 .amount(transaction.getAmount())
                 .convertedAmount(transaction.getConvertedAmount() != null ? transaction.getConvertedAmount() : transaction.getAmount())
                 .transactionType(transaction.getTransactionType())
-                .status(transaction.getStatus()) // 🚀 DTO'YA STATÜYÜ BAĞLADIK
+                .status(transaction.getStatus())
                 .description(transaction.getDescription())
                 .transactionDate(transaction.getTransactionDate())
-                .senderAccountId(transaction.getSenderAccount() != null
-                        ? transaction.getSenderAccount().getId()
-                        : null)
-                .receiverAccountId(transaction.getReceiverAccount() != null
-                        ? transaction.getReceiverAccount().getId()
-                        : null)
+                .senderAccountId(transaction.getSenderAccount() != null ? transaction.getSenderAccount().getId() : null)
+                .receiverAccountId(transaction.getReceiverAccount() != null ? transaction.getReceiverAccount().getId() : null)
                 .build();
     }
 }

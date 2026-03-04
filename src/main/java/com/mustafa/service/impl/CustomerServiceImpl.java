@@ -2,11 +2,14 @@ package com.mustafa.service.impl;
 
 import com.mustafa.dto.request.ChangePasswordRequest;
 import com.mustafa.dto.request.UpdateProfileRequest;
-import com.mustafa.dto.response.CustomerResponse;
 import com.mustafa.dto.response.UserProfileResponse;
-import com.mustafa.entity.Customer;
+import com.mustafa.entity.AppUser;
+import com.mustafa.entity.Company;
+import com.mustafa.entity.RetailCustomer;
 import com.mustafa.exception.BankOperationException;
-import com.mustafa.repository.CustomerRepository;
+import com.mustafa.repository.AppUserRepository;
+import com.mustafa.repository.CompanyRepository;
+import com.mustafa.repository.RetailCustomerRepository;
 import com.mustafa.service.CustomerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -18,94 +21,128 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CustomerServiceImpl implements CustomerService {
 
-    private final CustomerRepository customerRepository;
+    private final AppUserRepository appUserRepository;
+    private final RetailCustomerRepository retailCustomerRepository;
+    private final CompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
+
+    private AppUser getAuthenticatedAppUser() {
+        String identityNumber = SecurityContextHolder.getContext().getAuthentication().getName();
+        return appUserRepository.findByIdentityNumber(identityNumber)
+                .orElseThrow(() -> new BankOperationException("Kullanıcı bulunamadı!"));
+    }
 
     @Override
     @Transactional
-    public CustomerResponse updateProfile(UpdateProfileRequest request) {
-        String currentTcNo = SecurityContextHolder.getContext().getAuthentication().getName();
+    public UserProfileResponse updateProfile(UpdateProfileRequest request) {
+        AppUser appUser = getAuthenticatedAppUser();
+        String profileName = "";
+        String email = "";
 
-        Customer customer = customerRepository.findByTcNo(currentTcNo)
-                .orElseThrow(() -> new BankOperationException("Müşteri bulunamadı!"));
+        if (appUser.getRole() == AppUser.Role.RETAIL_CUSTOMER) {
+            RetailCustomer retail = retailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
 
-        if (request.getEmail() != null && !request.getEmail().isBlank()) {
-            customer.setEmail(request.getEmail());
-        }
-
-        if (request.getFullName() != null && !request.getFullName().isBlank()) {
-            // PROFIL ICIN EXCEPTION KONTROLU
-            if (request.getFullName().length() < 3) {
-                throw new BankOperationException("Ad soyad en az 3 karakter olmalıdır!");
+            if (request.getEmail() != null && !request.getEmail().isBlank()) {
+                retail.setEmail(request.getEmail());
             }
-            customer.setFullName(request.getFullName());
+
+            // 🚀 DÜZELTME: Gelen tek parça string'i Ad ve Soyad olarak ikiye bölüyoruz
+            if (request.getProfileName() != null && request.getProfileName().trim().length() >= 3) {
+                String fullName = request.getProfileName().trim();
+                int lastSpaceIndex = fullName.lastIndexOf(" ");
+
+                if (lastSpaceIndex == -1) {
+                    // Sadece tek isim girildiyse (Örn: "Mustafa")
+                    retail.setFirstName(fullName);
+                    retail.setLastName(""); // Eski soyadı temizliyoruz ki "ÇÇ" asılı kalmasın!
+                } else {
+                    // Son boşluğa kadar olan kısım Ad, sonrası Soyad
+                    retail.setFirstName(fullName.substring(0, lastSpaceIndex).trim());
+                    retail.setLastName(fullName.substring(lastSpaceIndex + 1).trim());
+                }
+            }
+            retailCustomerRepository.save(retail);
+
+            // 🚀 DÜZELTME: Soyad boş kalırsa fazladan boşluk dönmesin diye trim() ekledik
+            profileName = (retail.getFirstName() + " " + retail.getLastName()).trim();
+            email = retail.getEmail();
+
+        } else if (appUser.getRole() == AppUser.Role.CORPORATE_MANAGER) {
+            Company company = companyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
+
+            if (request.getEmail() != null && !request.getEmail().isBlank()) {
+                company.setContactEmail(request.getEmail());
+            }
+
+            // Kurumsal müşterilerde zaten tek parça şirket adı var, bölmeye gerek yok
+            if (request.getProfileName() != null && request.getProfileName().trim().length() >= 3) {
+                company.setCompanyName(request.getProfileName().trim());
+            }
+            companyRepository.save(company);
+
+            profileName = company.getCompanyName();
+            email = company.getContactEmail();
         }
 
-        customerRepository.save(customer);
-
-        return CustomerResponse.builder()
-                .tcNo(customer.getTcNo())
-                .fullName(customer.getFullName())
-                .email(customer.getEmail())
-                .role(customer.getRole().name()) // EKLENDİ
-                .status(customer.getStatus().name()) // 🚀 ŞU SATIRI TAM BURAYA EKLE
+        return UserProfileResponse.builder()
+                .identityNumber(appUser.getIdentityNumber())
+                .profileName(profileName)
+                .email(email)
+                .role(appUser.getRole().name())
+                .status(appUser.getStatus().name())
                 .build();
     }
 
     @Override
     @Transactional
     public void changePassword(ChangePasswordRequest request) {
-        String currentTcNo = SecurityContextHolder.getContext().getAuthentication().getName();
-
-        Customer customer = customerRepository.findByTcNo(currentTcNo)
-                .orElseThrow(() -> new BankOperationException("Müşteri bulunamadı!"));
-
-        // SIFRE ICIN EXCEPTION KONTROLLERI
-        if (!passwordEncoder.matches(request.getOldPassword(), customer.getPassword())) {
+        AppUser appUser = getAuthenticatedAppUser();
+        if (!passwordEncoder.matches(request.getOldPassword(), appUser.getPassword())) {
             throw new BankOperationException("Eski şifreniz hatalı!");
         }
-
         if (request.getNewPassword().length() < 6) {
-            throw new BankOperationException("Yeni şifreniz en az 6 karakter olmalıdır ve güvenli olmalıdır!");
+            throw new BankOperationException("Yeni şifreniz en az 6 karakter olmalıdır!");
         }
-
-        customer.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        customerRepository.save(customer);
+        appUser.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        appUserRepository.save(appUser);
     }
 
+    @Override
     public UserProfileResponse getMyProfile() {
-        // 1. Token'dan giriş yapmış kullanıcının tcNo'sunu al (Spring Security bunu otomatik yapar)
-        String tcNo = SecurityContextHolder.getContext().getAuthentication().getName();
+        AppUser appUser = getAuthenticatedAppUser();
+        String profileName = "";
+        String email = "";
 
-        // 2. Veritabanından müşteriyi bul
-        Customer customer = customerRepository.findByTcNo(tcNo)
-                .orElseThrow(() -> new RuntimeException("Kullanıcı bulunamadı"));
+        if (appUser.getRole() == AppUser.Role.RETAIL_CUSTOMER) {
+            RetailCustomer retail = retailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
+            profileName = retail.getFirstName() + " " + retail.getLastName();
+            email = retail.getEmail();
+        } else if (appUser.getRole() == AppUser.Role.CORPORATE_MANAGER) {
+            Company company = companyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
+            profileName = company.getCompanyName();
+            email = company.getContactEmail();
+        } else {
+            profileName = "Sistem Yöneticisi";
+            email = "admin@bank.com";
+        }
 
-        // 3. Bilgileri DTO'ya çevirip dön
         return UserProfileResponse.builder()
-                .tcNo(customer.getTcNo())
-                .fullName(customer.getFullName())
-                .email(customer.getEmail())
-                .role(customer.getRole().name()) // Enum ise .name() yapıyoruz
-                .status(customer.getStatus().name()) // 🚀 ŞU SATIRI TAM BURAYA EKLE
+                .identityNumber(appUser.getIdentityNumber())
+                .profileName(profileName)
+                .email(email)
+                .role(appUser.getRole().name())
+                .status(appUser.getStatus().name())
                 .build();
     }
 
-    @Transactional
     @Override
+    @Transactional
     public void appealRejection() {
-        // 1. İsteği atan müşteriyi bul
-        String currentTcNo = SecurityContextHolder.getContext().getAuthentication().getName();
-        Customer customer = customerRepository.findByTcNo(currentTcNo)
-                .orElseThrow(() -> new BankOperationException("Müşteri bulunamadı!"));
-
-        // 2. Sadece REDDEDİLMİŞ kişiler bu talebi yapabilir
-        if (customer.getStatus() != Customer.ApprovalStatus.REJECTED) {
+        AppUser appUser = getAuthenticatedAppUser();
+        if (appUser.getStatus() != AppUser.ApprovalStatus.REJECTED) {
             throw new BankOperationException("Sadece reddedilen hesaplar yeniden değerlendirme talebinde bulunabilir.");
         }
-
-        // 3. Müşteriyi tekrar admin onayına (PENDING) gönder
-        customer.setStatus(Customer.ApprovalStatus.PENDING);
-        customerRepository.save(customer);
+        appUser.setStatus(AppUser.ApprovalStatus.PENDING);
+        appUserRepository.save(appUser);
     }
 }

@@ -2,21 +2,14 @@ package com.mustafa.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @Data
-@Builder
-@AllArgsConstructor
-@NoArgsConstructor
 public class LoginRequest {
+    @NotBlank(message = "Kimlik/Vergi Numarası boş olamaz")
+    @Size(min = 10, max = 11, message = "Kimlik/Vergi Numarası 10 veya 11 haneli olmalıdır")
+    private String identityNumber;
 
-    @NotBlank(message = "TC Kimlik No boş bırakılamaz")
-    @Size(min = 11, max = 11, message = "TC Kimlik No 11 haneli olmalıdır")
-    private String tcNo;
-
-    @NotBlank(message = "Şifre boş bırakılamaz")
+    @NotBlank(message = "Şifre boş olamaz")
     private String password;
 }

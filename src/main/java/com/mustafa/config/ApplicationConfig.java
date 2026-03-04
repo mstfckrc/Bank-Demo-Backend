@@ -1,6 +1,6 @@
 package com.mustafa.config;
 
-import com.mustafa.repository.CustomerRepository;
+import com.mustafa.repository.AppUserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,7 +9,6 @@ import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -17,13 +16,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @RequiredArgsConstructor
 public class ApplicationConfig {
 
-    private final CustomerRepository customerRepository;
+    private final AppUserRepository appUserRepository;
 
     // Spring Security'ye kullanıcıyı (Müşteriyi) TC No ile bulmasını söylüyoruz
     @Bean
     public UserDetailsService userDetailsService() {
-        return username -> customerRepository.findByTcNo(username)
-                .orElseThrow(() -> new UsernameNotFoundException("Müşteri bulunamadı: " + username));
+        return username -> appUserRepository.findByIdentityNumber(username)
+                .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("Kullanıcı bulunamadı: " + username));
     }
 
     @Bean

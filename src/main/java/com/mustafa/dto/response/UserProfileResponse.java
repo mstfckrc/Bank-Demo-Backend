@@ -10,9 +10,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class UserProfileResponse {
-    private String tcNo;
-    private String fullName;
+    private String identityNumber;
+    private String profileName; // Bireyse Ad-Soyad, Şirketse Ünvan dönecek
     private String email;
     private String role;
-    private String status; // 🚀 YENİ EKLENDİ
+    private String status;
 }

@@ -6,6 +6,7 @@ import com.mustafa.dto.request.UpdateProfileRequest;
 import com.mustafa.dto.response.AccountResponse;
 import com.mustafa.dto.response.CustomerResponse;
 import com.mustafa.dto.response.TransactionResponse;
+import com.mustafa.dto.response.UserProfileResponse;
 import com.mustafa.service.AdminService;
 import com.mustafa.service.TransactionService; // 🚀 YENİ EKLENDİ
 import lombok.RequiredArgsConstructor;
@@ -38,7 +39,7 @@ public class AdminControllerImpl implements AdminController {
 
     @Override
     @GetMapping("/customers")
-    public ResponseEntity<List<CustomerResponse>> getAllCustomers() {
+    public ResponseEntity<List<UserProfileResponse>> getAllCustomers() {
         return ResponseEntity.ok(adminService.getAllCustomers());
     }
 
@@ -53,7 +54,7 @@ public class AdminControllerImpl implements AdminController {
 
     @Override
     @PutMapping("/customers/{tcNo}")
-    public ResponseEntity<CustomerResponse> updateCustomer(@PathVariable String tcNo, @RequestBody UpdateProfileRequest request) {
+    public ResponseEntity<UserProfileResponse> updateCustomer(@PathVariable String tcNo, @RequestBody UpdateProfileRequest request) {
         return ResponseEntity.ok(adminService.updateCustomer(tcNo, request));
     }
 

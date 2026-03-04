@@ -5,6 +5,7 @@ import com.mustafa.dto.request.UpdateProfileRequest;
 import com.mustafa.dto.response.AccountResponse;
 import com.mustafa.dto.response.CustomerResponse;
 import com.mustafa.dto.response.TransactionResponse;
+import com.mustafa.dto.response.UserProfileResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -14,9 +15,9 @@ import java.util.List;
 import java.util.Map;
 
 public interface AdminController {
-    ResponseEntity<List<CustomerResponse>> getAllCustomers();
+    ResponseEntity<List<UserProfileResponse>> getAllCustomers();
     ResponseEntity<Map<String, String>> deleteCustomer(@PathVariable String tcNo);
-    ResponseEntity<CustomerResponse> updateCustomer(@PathVariable String tcNo, @RequestBody UpdateProfileRequest request);
+    ResponseEntity<UserProfileResponse> updateCustomer(@PathVariable String tcNo, @RequestBody UpdateProfileRequest request);
 
     ResponseEntity<List<AccountResponse>> getAllAccounts();
     ResponseEntity<List<AccountResponse>> getCustomerAccounts(@PathVariable String tcNo);
