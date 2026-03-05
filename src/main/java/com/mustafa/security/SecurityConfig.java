@@ -24,17 +24,23 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configure(http))
+                // ... diğer kodlar aynı
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/v3/api-docs/**").permitAll()
                         .requestMatchers("/swagger-ui/**").permitAll()
                         .requestMatchers("/swagger-ui.html").permitAll()
-                        .requestMatchers("/api/v1/currencies/rates").permitAll() // YENİ EKLENEN VİTRİN İZNİ
-                        // YENI EKLENEN KISIM: Sadece ADMIN rolü olanlar girebilir
-                        // Not: Entity'de "ROLE_" eklediğin için burada sadece "ADMIN" yazıyoruz, Spring kendisi eşleştiriyor.
+                        .requestMatchers("/api/v1/currencies/rates").permitAll()
+
+                        // 🚀 V2 YAMASI: Kurumsal Yöneticiler için güvenli bölge
+                        .requestMatchers("/api/v1/companies/employees/**").hasRole("CORPORATE_MANAGER")
+
+                        // Admin yetkileri
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
+
                         .anyRequest().authenticated()
                 )
+// ...
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )

@@ -11,4 +11,10 @@ public interface CompanyEmployeeRepository extends JpaRepository<CompanyEmployee
 
     // Bir bireyin hangi şirkette çalıştığını bulmak için:
     Optional<CompanyEmployee> findByRetailCustomerId(Long retailCustomerId);
+
+    // Personel bu şirkette zaten çalışıyor mu kontrolü için
+    boolean existsByCompany_IdAndRetailCustomer_AppUser_IdentityNumber(Long companyId, String identityNumber);
+
+    // Silme veya Güncelleme işlemi için spesifik personeli bulmak için
+    Optional<CompanyEmployee> findByCompany_IdAndRetailCustomer_AppUser_IdentityNumber(Long companyId, String identityNumber);
 }
