@@ -126,7 +126,7 @@ public class TransactionServiceImpl implements TransactionService {
                 " (Çevrim: " + request.getAmount() + " " + senderAccount.getCurrency() +
                 " -> " + String.format("%.2f", convertedAmountDouble) + " " + receiverAccount.getCurrency() + ")";
 
-        // 3. MASAK KONTROLÜ (Aynen Korundu)
+        // 3. MASAK KONTROLÜ VE İŞLEM TİPİ BELİRLEME
         Transaction.TransactionStatus status;
         Double amountInTryDouble = currencyService.convertAmount(
                 request.getAmount().doubleValue(),
@@ -135,11 +135,17 @@ public class TransactionServiceImpl implements TransactionService {
         );
         BigDecimal amountInTry = BigDecimal.valueOf(amountInTryDouble);
 
-        if (amountInTry.compareTo(TRANSACTION_LIMIT) >= 0) {
+        // 🚀 DÜZELTME: Veritabanı ENUM hatası (TC Kayıtlı Hatası) vermesin diye tipi TRANSFER yapıyoruz!
+        // Zaten MASAK'ı delme işini request.isSalaryPayment() bayrağı ile sağladık.
+        Transaction.TransactionType type = Transaction.TransactionType.TRANSFER;
+
+        // 🚀 MASAK KALKANI (Maaş ise asla takılmaz!)
+        if (!request.isSalaryPayment() && amountInTry.compareTo(TRANSACTION_LIMIT) >= 0) {
             accountRepository.save(senderAccount);
             status = Transaction.TransactionStatus.PENDING_APPROVAL;
             enrichedDescription += String.format(" - [YÜKLÜ İŞLEM: Yaklaşık %.2f TL - YÖNETİCİ ONAYI BEKLİYOR]", amountInTryDouble);
         } else {
+            // Maaşsa (500.000 TL bile olsa) veya limiti aşmayan transferse DİREKT ONAYLA!
             receiverAccount.setBalance(receiverAccount.getBalance().add(convertedAmount));
             accountRepository.save(senderAccount);
             accountRepository.save(receiverAccount);
@@ -153,7 +159,7 @@ public class TransactionServiceImpl implements TransactionService {
                 .receiverAccount(receiverAccount)
                 .amount(request.getAmount())
                 .convertedAmount(convertedAmount)
-                .transactionType(Transaction.TransactionType.TRANSFER)
+                .transactionType(type) // 🚀 ARTIK HATA FIRLATMAYACAK
                 .status(status)
                 .description(enrichedDescription)
                 .build();

@@ -2,8 +2,10 @@ package com.mustafa.controller.impl;
 
 import com.mustafa.controller.CompanyEmployeeController;
 import com.mustafa.dto.request.HireEmployeeRequest;
+import com.mustafa.dto.request.SalaryPaymentRequest;
 import com.mustafa.dto.request.UpdateEmployeeRequest;
 import com.mustafa.dto.response.CompanyEmployeeResponse;
+import com.mustafa.dto.response.TransactionResponse;
 import com.mustafa.service.CompanyEmployeeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -64,5 +66,15 @@ public class CompanyEmployeeControllerImpl implements CompanyEmployeeController 
         Map<String, String> response = new HashMap<>();
         response.put("message", employeeIdentityNumber + " kimlik numaralı personel başarıyla şirketten çıkarıldı.");
         return ResponseEntity.ok(response);
+    }
+
+    @Override
+    @PostMapping("/pay-salaries")
+    public ResponseEntity<List<TransactionResponse>> paySalaries(
+            Principal principal,
+            @RequestBody SalaryPaymentRequest request) { // @Valid arayüzden miras alınır
+
+        String managerIdentityNumber = principal.getName();
+        return ResponseEntity.ok(companyEmployeeService.paySalaries(managerIdentityNumber, request));
     }
 }

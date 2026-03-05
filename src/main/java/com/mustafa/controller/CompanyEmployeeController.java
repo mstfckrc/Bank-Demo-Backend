@@ -1,8 +1,10 @@
 package com.mustafa.controller;
 
 import com.mustafa.dto.request.HireEmployeeRequest;
+import com.mustafa.dto.request.SalaryPaymentRequest;
 import com.mustafa.dto.request.UpdateEmployeeRequest;
 import com.mustafa.dto.response.CompanyEmployeeResponse;
+import com.mustafa.dto.response.TransactionResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,4 +28,8 @@ public interface CompanyEmployeeController {
     ResponseEntity<Map<String, String>> removeEmployee(
             Principal principal,
             @PathVariable String employeeIdentityNumber);
+
+    ResponseEntity<List<TransactionResponse>> paySalaries(
+            Principal principal,
+            @Valid @RequestBody SalaryPaymentRequest request);
 }

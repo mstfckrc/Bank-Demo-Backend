@@ -28,4 +28,6 @@ public class TransferRequest {
 
     // Opsiyonel açıklama alanı (Kira, Borç vb.)
     private String description;
+
+    private boolean isSalaryPayment; // 🚀 YENİ EKLENDİ (Varsayılanı false'tur, normal transferleri etkilemez)
 }
