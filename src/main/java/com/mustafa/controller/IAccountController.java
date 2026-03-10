@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.List;
 
-public interface AccountController {
+public interface IAccountController {
 
     // Yeni hesap açma isteğini karşılar
     ResponseEntity<AccountResponse> createAccount(@Valid @RequestBody CreateAccountRequest request);

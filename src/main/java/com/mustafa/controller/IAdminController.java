@@ -3,7 +3,6 @@ package com.mustafa.controller;
 import com.mustafa.dto.request.OpenAccountRequest;
 import com.mustafa.dto.request.UpdateProfileRequest;
 import com.mustafa.dto.response.AccountResponse;
-import com.mustafa.dto.response.CustomerResponse;
 import com.mustafa.dto.response.TransactionResponse;
 import com.mustafa.dto.response.UserProfileResponse;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import java.util.List;
 import java.util.Map;
 
-public interface AdminController {
+public interface IAdminController {
     ResponseEntity<List<UserProfileResponse>> getAllCustomers();
     ResponseEntity<Map<String, String>> deleteCustomer(@PathVariable String tcNo);
     ResponseEntity<UserProfileResponse> updateCustomer(@PathVariable String tcNo, @RequestBody UpdateProfileRequest request);

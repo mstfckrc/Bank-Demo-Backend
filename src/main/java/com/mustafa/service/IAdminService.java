@@ -8,7 +8,7 @@ import com.mustafa.dto.response.UserProfileResponse;
 
 import java.util.List;
 
-public interface AdminService {
+public interface IAdminService {
     List<UserProfileResponse> getAllCustomers();
     void deleteCustomer(String identityNumber);
     UserProfileResponse updateCustomer(String identityNumber, UpdateProfileRequest request);

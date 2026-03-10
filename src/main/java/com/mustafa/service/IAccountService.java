@@ -5,7 +5,7 @@ import com.mustafa.dto.response.AccountResponse;
 
 import java.util.List;
 
-public interface AccountService {
+public interface IAccountService {
 
     // Yeni hesap açma
     AccountResponse createAccount(CreateAccountRequest request);

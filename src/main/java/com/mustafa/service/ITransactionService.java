@@ -6,7 +6,7 @@ import com.mustafa.dto.response.TransactionResponse;
 
 import java.util.List;
 
-public interface TransactionService {
+public interface ITransactionService {
 
     // Hesaba dışarıdan (ATM) para yatırma
     TransactionResponse deposit(DepositRequest request);
@@ -22,7 +22,7 @@ public interface TransactionService {
             String endDate
     );
 
-    // com.mustafa.service.TransactionService.java içine ekle:
+    // com.mustafa.service.ITransactionService.java içine ekle:
     List<TransactionResponse> getAllTransactionsForAdmin(String status);
     TransactionResponse approveTransaction(String referenceNo);
     TransactionResponse rejectTransaction(String referenceNo);

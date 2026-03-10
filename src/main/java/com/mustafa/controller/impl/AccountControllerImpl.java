@@ -1,47 +1,51 @@
 package com.mustafa.controller.impl;
 
-import com.mustafa.controller.AccountController;
+import com.mustafa.controller.IAccountController;
 import com.mustafa.dto.request.CreateAccountRequest;
 import com.mustafa.dto.response.AccountResponse;
-import com.mustafa.service.AccountService;
+import com.mustafa.service.IAccountService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j // 🚀 LOGGER AKTİF
 @RestController
 @RequestMapping("/api/v1/accounts")
 @RequiredArgsConstructor
-public class AccountControllerImpl implements AccountController {
+public class AccountControllerImpl implements IAccountController {
 
-    private final AccountService accountService;
+    private final IAccountService IAccountService;
 
     @Override
     @PostMapping
     public ResponseEntity<AccountResponse> createAccount(CreateAccountRequest request) {
-        // Hesap başarıyla açıldığında 201 Created dönmek en profesyonelidir
-        return new ResponseEntity<>(accountService.createAccount(request), HttpStatus.CREATED);
+        log.info("REST İsteği: Yeni hesap açma talebi alındı. İstenen Döviz Cinsi: {}", request.getCurrency());
+        return new ResponseEntity<>(IAccountService.createAccount(request), HttpStatus.CREATED);
     }
 
     @Override
     @GetMapping
     public ResponseEntity<List<AccountResponse>> getMyAccounts() {
-        // Hesapları başarıyla getirdiğinde 200 OK döner
-        return ResponseEntity.ok(accountService.getMyAccounts());
+        log.info("REST İsteği: Kullanıcının hesap listesi sorgulanıyor.");
+        return ResponseEntity.ok(IAccountService.getMyAccounts());
     }
 
     @Override
     @GetMapping("/{accountNumber}")
     public ResponseEntity<AccountResponse> getAccountByAccountNumber(@PathVariable String accountNumber) {
-        return ResponseEntity.ok(accountService.getAccountByAccountNumber(accountNumber));
+        log.info("REST İsteği: Hesap detayları sorgulanıyor. Hesap No: {}", accountNumber);
+        return ResponseEntity.ok(IAccountService.getAccountByAccountNumber(accountNumber));
     }
 
     @Override
     @DeleteMapping("/{accountNumber}")
     public ResponseEntity<String> deleteAccount(@PathVariable String accountNumber) {
-        accountService.deleteAccount(accountNumber);
+        log.info("REST İsteği: Hesap kapatma talebi alındı. Hesap No: {}", accountNumber);
+        IAccountService.deleteAccount(accountNumber);
         return ResponseEntity.ok("Hesap başarıyla kapatıldı.");
     }
 }

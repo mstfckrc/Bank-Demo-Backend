@@ -7,11 +7,12 @@ import com.mustafa.entity.Account;
 import com.mustafa.entity.AppUser;
 import com.mustafa.entity.Transaction;
 import com.mustafa.exception.BankOperationException;
-import com.mustafa.repository.AccountRepository;
-import com.mustafa.repository.TransactionRepository;
-import com.mustafa.service.CurrencyService;
-import com.mustafa.service.TransactionService;
+import com.mustafa.repository.IAccountRepository;
+import com.mustafa.repository.ITransactionRepository;
+import com.mustafa.service.ICurrencyService;
+import com.mustafa.service.ITransactionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,42 +25,54 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+@Slf4j // 🚀 LOGGER AKTİF
 @Service
 @RequiredArgsConstructor
-public class TransactionServiceImpl implements TransactionService {
+public class TransactionServiceImpl implements ITransactionService {
 
-    private final AccountRepository accountRepository;
-    private final TransactionRepository transactionRepository;
-    private final CurrencyService currencyService;
+    private final IAccountRepository IAccountRepository;
+    private final ITransactionRepository ITransactionRepository;
+    private final ICurrencyService ICurrencyService;
 
-    // Yüklü işlem (MASAK) sınırı
     private static final BigDecimal TRANSACTION_LIMIT = new BigDecimal("50000");
+
+    // 🚀 KVKK Maskeleme Kalkanı
+    private String maskIdentity(String identity) {
+        if (identity == null || identity.length() <= 4) return "****";
+        return "*******" + identity.substring(identity.length() - 4);
+    }
 
     @Override
     @Transactional
     public TransactionResponse deposit(DepositRequest request) {
-
-        Account account = accountRepository.findByIban(request.getIban())
-                .orElseThrow(() -> new BankOperationException("Hesap bulunamadı!"));
-
         String currentIdentity = SecurityContextHolder.getContext().getAuthentication().getName();
+        String maskedId = maskIdentity(currentIdentity);
+        log.info("Para yatırma işlemi başlatıldı. Kullanıcı: {}, IBAN: {}, Tutar: {}", maskedId, request.getIban(), request.getAmount());
 
-        // 🚀 CUSTOMER YERİNE APPUSER (KİMLİK) KONTROLÜ
+        // 🚀 DÜZELTME: Hesap bulunamazsa artık sessizce çökmek yerine loga (Telsize) haber verecek!
+        Account account = IAccountRepository.findByIban(request.getIban())
+                .orElseThrow(() -> {
+                    log.warn("Para yatırma reddedildi: Belirtilen hedef hesap (IBAN: {}) sistemde bulunamadı!", request.getIban());
+                    return new BankOperationException("Hesap bulunamadı!");
+                });
+
         if (!account.getAppUser().getIdentityNumber().equals(currentIdentity)) {
+            log.warn("🚨 GÜVENLİK İHLALİ DENEMESİ! Kullanıcı ({}), başkasına ait bir hesaba para yatırmaya çalıştı!", maskedId);
             throw new BankOperationException("Sadece kendi hesaplarınıza para yatırabilirsiniz!");
         }
 
-        // 🚀 CUSTOMER YERİNE APPUSER (ONAY) KONTROLÜ
         if (account.getAppUser().getStatus() != AppUser.ApprovalStatus.APPROVED) {
+            log.warn("İşlem reddedildi: Kullanıcı ({}) onaylı değil (PENDING).", maskedId);
             throw new BankOperationException("Hesabınız onaylı olmadığı için para yatırma işlemi yapamazsınız. Lütfen durumunuzu kontrol ediniz.");
         }
 
         if (!account.isActive()) {
+            log.warn("İşlem reddedildi: Hedef hesap ({}) pasif durumda.", request.getIban());
             throw new BankOperationException("Bu hesap kapalı olduğu için para yatırma işlemi yapılamaz!");
         }
 
         account.setBalance(account.getBalance().add(request.getAmount()));
-        accountRepository.save(account);
+        IAccountRepository.save(account);
 
         Transaction transaction = Transaction.builder()
                 .referenceNo(UUID.randomUUID().toString())
@@ -70,36 +83,52 @@ public class TransactionServiceImpl implements TransactionService {
                 .description("Kendi Hesabına Para Yatırma")
                 .build();
 
-        transactionRepository.save(transaction);
+        ITransactionRepository.save(transaction);
+        log.info("✅ Para yatırma işlemi başarıyla tamamlandı. Referans: {}", transaction.getReferenceNo());
+
         return mapToResponse(transaction);
     }
 
     @Override
     @Transactional
     public TransactionResponse transfer(TransferRequest request) {
-
-        Account senderAccount = accountRepository.findByIban(request.getSenderIban())
-                .orElseThrow(() -> new BankOperationException("Gönderen hesap bulunamadı!"));
-
-        Account receiverAccount = accountRepository.findByIban(request.getReceiverIban())
-                .orElseThrow(() -> new BankOperationException("Alıcı hesap bulunamadı!"));
-
         String currentIdentity = SecurityContextHolder.getContext().getAuthentication().getName();
+        String maskedId = maskIdentity(currentIdentity);
 
-        // 🚀 CUSTOMER YERİNE APPUSER KONTROLLERİ
+        log.info("Transfer süreci başlatıldı. Gönderen: {}, Alıcı IBAN: {}, Tutar: {}", maskedId, request.getReceiverIban(), request.getAmount());
+
+        // 🚀 DÜZELTME: Gönderen hesap hatası loglandı
+        Account senderAccount = IAccountRepository.findByIban(request.getSenderIban())
+                .orElseThrow(() -> {
+                    log.warn("Transfer iptali: Gönderici IBAN ({}) veritabanında bulunamadı!", request.getSenderIban());
+                    return new BankOperationException("Gönderen hesap bulunamadı!");
+                });
+
+        // 🚀 DÜZELTME: Alıcı hesap (Örn: "askjdaskd") hatası loglandı
+        Account receiverAccount = IAccountRepository.findByIban(request.getReceiverIban())
+                .orElseThrow(() -> {
+                    log.warn("Transfer iptali: Hedef alınan alıcı IBAN ({}) sistemde kayıtlı değil!", request.getReceiverIban());
+                    return new BankOperationException("Alıcı hesap bulunamadı!");
+                });
+
         if (!senderAccount.getAppUser().getIdentityNumber().equals(currentIdentity)) {
+            log.warn("🚨 GÜVENLİK İHLALİ DENEMESİ! Kullanıcı ({}), başkasına ait bir kasadan transfer yapmaya çalıştı!", maskedId);
             throw new BankOperationException("Sadece kendi hesaplarınızdan para transferi yapabilirsiniz!");
         }
 
         if (senderAccount.getAppUser().getStatus() != AppUser.ApprovalStatus.APPROVED) {
+            log.warn("Transfer reddedildi: Kullanıcı ({}) onaylı değil.", maskedId);
             throw new BankOperationException("Hesabınız onaylı olmadığı için para transferi gerçekleştiremezsiniz. Lütfen durumunuzu kontrol ediniz.");
         }
 
         if (senderAccount.getBalance().compareTo(request.getAmount()) < 0) {
+            log.warn("Transfer reddedildi: Yetersiz Bakiye! Kasa: {}, İstenen: {}, Mevcut: {}",
+                    senderAccount.getIban(), request.getAmount(), senderAccount.getBalance());
             throw new BankOperationException("Yetersiz bakiye! İşlem gerçekleştirilemedi.");
         }
 
         if (senderAccount.getIban().equals(receiverAccount.getIban())) {
+            log.warn("Transfer iptali: Kullanıcı kendi hesabından aynı hesabına para göndermeye çalıştı.");
             throw new BankOperationException("Aynı hesaba transfer yapamazsınız. Lütfen farklı bir alıcı IBAN giriniz.");
         }
 
@@ -108,6 +137,7 @@ public class TransactionServiceImpl implements TransactionService {
         }
 
         if (!senderAccount.isActive() || !receiverAccount.isActive()) {
+            log.warn("Transfer reddedildi: Gönderici veya Alıcı hesap pasif durumda.");
             throw new BankOperationException("İşlem yapılacak hesaplardan biri kapalıdır!");
         }
 
@@ -115,40 +145,46 @@ public class TransactionServiceImpl implements TransactionService {
         senderAccount.setBalance(senderAccount.getBalance().subtract(request.getAmount()));
 
         // 2. Canlı Kur Çevirimi
-        Double convertedAmountDouble = currencyService.convertAmount(
+        Double convertedAmountDouble = ICurrencyService.convertAmount(
                 request.getAmount().doubleValue(),
                 senderAccount.getCurrency().toString(),
                 receiverAccount.getCurrency().toString()
         );
         BigDecimal convertedAmount = BigDecimal.valueOf(convertedAmountDouble);
 
-        String enrichedDescription = request.getDescription() +
-                " (Çevrim: " + request.getAmount() + " " + senderAccount.getCurrency() +
-                " -> " + String.format("%.2f", convertedAmountDouble) + " " + receiverAccount.getCurrency() + ")";
+        // 🚀 ÇÖZÜM: Sadece para birimleri FARKLIYSA çevrim metnini ekle!
+        String enrichedDescription = request.getDescription() != null ? request.getDescription() : "Para Transferi";
+
+        if (senderAccount.getCurrency() != receiverAccount.getCurrency()) {
+            enrichedDescription += " (Çevrim: " + request.getAmount() + " " + senderAccount.getCurrency() +
+                    " -> " + String.format("%.2f", convertedAmountDouble) + " " + receiverAccount.getCurrency() + ")";
+        }
 
         // 3. MASAK KONTROLÜ VE İŞLEM TİPİ BELİRLEME
         Transaction.TransactionStatus status;
-        Double amountInTryDouble = currencyService.convertAmount(
+        Double amountInTryDouble = ICurrencyService.convertAmount(
                 request.getAmount().doubleValue(),
                 senderAccount.getCurrency().toString(),
                 "TRY"
         );
         BigDecimal amountInTry = BigDecimal.valueOf(amountInTryDouble);
 
-        // 🚀 DÜZELTME: Veritabanı ENUM hatası (TC Kayıtlı Hatası) vermesin diye tipi TRANSFER yapıyoruz!
-        // Zaten MASAK'ı delme işini request.isSalaryPayment() bayrağı ile sağladık.
         Transaction.TransactionType type = Transaction.TransactionType.TRANSFER;
 
-        // 🚀 MASAK KALKANI (Maaş ise asla takılmaz!)
+        if (request.isSalaryPayment()) {
+            log.info("🛡️ Maaş ödemesi bayrağı tespit edildi! İşlem MASAK limit denetiminden ({} TRY) muaf tutuluyor.", TRANSACTION_LIMIT);
+        }
+
         if (!request.isSalaryPayment() && amountInTry.compareTo(TRANSACTION_LIMIT) >= 0) {
-            accountRepository.save(senderAccount);
+            log.warn("🚨 MASAK LİMİTİ AŞILDI! İşlem büyüklüğü: ~{} TRY. İşlem Admin onayına (PENDING_APPROVAL) bekletilmek üzere donduruldu.", String.format("%.2f", amountInTryDouble));
+            IAccountRepository.save(senderAccount);
             status = Transaction.TransactionStatus.PENDING_APPROVAL;
             enrichedDescription += String.format(" - [YÜKLÜ İŞLEM: Yaklaşık %.2f TL - YÖNETİCİ ONAYI BEKLİYOR]", amountInTryDouble);
         } else {
-            // Maaşsa (500.000 TL bile olsa) veya limiti aşmayan transferse DİREKT ONAYLA!
+            log.info("İşlem limitler dahilinde. Otomatik transfer onayı verildi.");
             receiverAccount.setBalance(receiverAccount.getBalance().add(convertedAmount));
-            accountRepository.save(senderAccount);
-            accountRepository.save(receiverAccount);
+            IAccountRepository.save(senderAccount);
+            IAccountRepository.save(receiverAccount);
             status = Transaction.TransactionStatus.COMPLETED;
         }
 
@@ -159,26 +195,36 @@ public class TransactionServiceImpl implements TransactionService {
                 .receiverAccount(receiverAccount)
                 .amount(request.getAmount())
                 .convertedAmount(convertedAmount)
-                .transactionType(type) // 🚀 ARTIK HATA FIRLATMAYACAK
+                .transactionType(type)
                 .status(status)
                 .description(enrichedDescription)
                 .build();
 
-        transactionRepository.save(transaction);
+        ITransactionRepository.save(transaction);
+        log.info("✅ İşlem kaydı başarıyla oluşturuldu. Durum: {}, Referans: {}", status, transaction.getReferenceNo());
+
         return mapToResponse(transaction);
     }
 
     @Override
     public List<TransactionResponse> getAccountTransactions(String accountNumber, String type, String startDate, String endDate) {
-        Account account = accountRepository.findByAccountNumber(accountNumber)
-                .orElseThrow(() -> new BankOperationException("Hesap bulunamadı!"));
+
+        // 🚀 DÜZELTME: Ekstre çekerken hesap bulunamazsa logla
+        Account account = IAccountRepository.findByAccountNumber(accountNumber)
+                .orElseThrow(() -> {
+                    log.warn("Ekstre iptali: Sorgulanan hesap numarası ({}) bulunamadı!", accountNumber);
+                    return new BankOperationException("Hesap bulunamadı!");
+                });
 
         String currentIdentity = SecurityContextHolder.getContext().getAuthentication().getName();
         if (!account.getAppUser().getIdentityNumber().equals(currentIdentity)) {
+            log.warn("🚨 GÜVENLİK İHLALİ DENEMESİ! Kullanıcı ({}), başkasına ait {} numaralı hesabın ekstresine erişmeye çalıştı!", maskIdentity(currentIdentity), accountNumber);
             throw new BankOperationException("Sadece kendi hesaplarınızın hareketlerini görebilirsiniz!");
         }
 
-        List<Transaction> transactions = transactionRepository
+        log.info("Hesap ekstresi çekiliyor. Hesap No: {}, Filtreler -> Tip: {}, Tarih: {} - {}", accountNumber, type, startDate, endDate);
+
+        List<Transaction> transactions = ITransactionRepository
                 .findBySenderAccountIdOrReceiverAccountIdOrderByTransactionDateDesc(account.getId(), account.getId());
 
         Stream<Transaction> stream = transactions.stream();
@@ -198,12 +244,14 @@ public class TransactionServiceImpl implements TransactionService {
         return stream.map(this::mapToResponse).collect(Collectors.toList());
     }
 
-    // --- ADMİN METOTLARI (Değişiklik yok, doğrudan Transaction ve Account üzerinden çalışıyor) ---
+    // --- ADMİN METOTLARI ---
 
     @Override
     public List<TransactionResponse> getAllTransactionsForAdmin(String status) {
-        Stream<Transaction> stream = transactionRepository.findAll().stream()
+        log.info("Admin İşlemi: Sistemdeki tüm transfer kayıtları sorgulanıyor. Filtre: {}", status != null ? status : "TÜMÜ");
+        Stream<Transaction> stream = ITransactionRepository.findAll().stream()
                 .sorted((t1, t2) -> t2.getTransactionDate().compareTo(t1.getTransactionDate()));
+
         if (status != null && !status.isBlank()) {
             stream = stream.filter(t -> t.getStatus().name().equalsIgnoreCase(status));
         }
@@ -213,36 +261,60 @@ public class TransactionServiceImpl implements TransactionService {
     @Override
     @Transactional
     public TransactionResponse approveTransaction(String referenceNo) {
-        Transaction transaction = transactionRepository.findByReferenceNo(referenceNo)
-                .orElseThrow(() -> new BankOperationException("İşlem bulunamadı!"));
+        log.info("Admin İşlemi: MASAK limitine takılan işlem ({}) için ONAY süreci başlatıldı...", referenceNo);
+
+        // 🚀 DÜZELTME: Admin işlem bulamazsa logla
+        Transaction transaction = ITransactionRepository.findByReferenceNo(referenceNo)
+                .orElseThrow(() -> {
+                    log.warn("Admin Onay Hatası: Onaylanmak istenen işlem ({}) bulunamadı!", referenceNo);
+                    return new BankOperationException("İşlem bulunamadı!");
+                });
+
         if (transaction.getStatus() != Transaction.TransactionStatus.PENDING_APPROVAL) {
+            log.warn("Admin Onay Hatası: İşlem ({}) zaten onaylanmış veya reddedilmiş!", referenceNo);
             throw new BankOperationException("Bu işlem onay bekleyen statüde değil!");
         }
+
         Account receiver = transaction.getReceiverAccount();
         receiver.setBalance(receiver.getBalance().add(transaction.getConvertedAmount()));
-        accountRepository.save(receiver);
+        IAccountRepository.save(receiver);
+
         transaction.setStatus(Transaction.TransactionStatus.COMPLETED);
         String updatedDesc = transaction.getDescription().replace(" - [YÜKLÜ İŞLEM: YÖNETİCİ ONAYI BEKLİYOR]", "") + " - [ONAYLANDI]";
         transaction.setDescription(updatedDesc);
-        transactionRepository.save(transaction);
+        ITransactionRepository.save(transaction);
+
+        log.info("✅ Admin İşlemi Başarılı: İşlem ({}) ONAYLANDI ve para alıcı hesaba geçirildi.", referenceNo);
         return mapToResponse(transaction);
     }
 
     @Override
     @Transactional
     public TransactionResponse rejectTransaction(String referenceNo) {
-        Transaction transaction = transactionRepository.findByReferenceNo(referenceNo)
-                .orElseThrow(() -> new BankOperationException("İşlem bulunamadı!"));
+        log.info("Admin İşlemi: MASAK limitine takılan işlem ({}) için RED süreci başlatıldı...", referenceNo);
+
+        // 🚀 DÜZELTME: Admin işlem bulamazsa logla
+        Transaction transaction = ITransactionRepository.findByReferenceNo(referenceNo)
+                .orElseThrow(() -> {
+                    log.warn("Admin Ret Hatası: Reddedilmek istenen işlem ({}) bulunamadı!", referenceNo);
+                    return new BankOperationException("İşlem bulunamadı!");
+                });
+
         if (transaction.getStatus() != Transaction.TransactionStatus.PENDING_APPROVAL) {
+            log.warn("Admin Ret Hatası: İşlem ({}) zaten onaylanmış veya reddedilmiş!", referenceNo);
             throw new BankOperationException("Bu işlem onay bekleyen statüde değil!");
         }
+
         Account sender = transaction.getSenderAccount();
         sender.setBalance(sender.getBalance().add(transaction.getAmount()));
-        accountRepository.save(sender);
+        IAccountRepository.save(sender);
+
         transaction.setStatus(Transaction.TransactionStatus.REJECTED);
         String updatedDesc = transaction.getDescription().replace(" - [YÜKLÜ İŞLEM: YÖNETİCİ ONAYI BEKLİYOR]", "") + " - [REDDEDİLDİ VE İADE EDİLDİ]";
         transaction.setDescription(updatedDesc);
-        transactionRepository.save(transaction);
+        ITransactionRepository.save(transaction);
+
+        log.info("🚫 Admin İşlemi Başarılı: İşlem ({}) REDDEDİLDİ ve dondurulan tutar göndericiye iade edildi.", referenceNo);
         return mapToResponse(transaction);
     }
 

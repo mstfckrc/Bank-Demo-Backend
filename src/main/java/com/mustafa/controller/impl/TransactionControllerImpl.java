@@ -1,33 +1,37 @@
 package com.mustafa.controller.impl;
 
-import com.mustafa.controller.TransactionController;
+import com.mustafa.controller.ITransactionController;
 import com.mustafa.dto.request.DepositRequest;
 import com.mustafa.dto.request.TransferRequest;
 import com.mustafa.dto.response.TransactionResponse;
-import com.mustafa.service.TransactionService;
+import com.mustafa.service.ITransactionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Slf4j // 🚀 LOGGER AKTİF
 @RestController
 @RequestMapping("/api/v1/transactions")
 @RequiredArgsConstructor
-public class TransactionControllerImpl implements TransactionController {
+public class TransactionControllerImpl implements ITransactionController {
 
-    private final TransactionService transactionService;
+    private final ITransactionService ITransactionService;
 
     @Override
     @PostMapping("/deposit")
     public ResponseEntity<TransactionResponse> deposit(@RequestBody DepositRequest request) {
-        return ResponseEntity.ok(transactionService.deposit(request));
+        log.info("REST İsteği: Para yatırma (Deposit) talebi alındı. Hedef IBAN: {}", request.getIban());
+        return ResponseEntity.ok(ITransactionService.deposit(request));
     }
 
     @Override
     @PostMapping("/transfer")
     public ResponseEntity<TransactionResponse> transfer(@RequestBody TransferRequest request) {
-        return ResponseEntity.ok(transactionService.transfer(request));
+        log.info("REST İsteği: Para transferi (Transfer) talebi alındı.");
+        return ResponseEntity.ok(ITransactionService.transfer(request));
     }
 
     @Override
@@ -37,7 +41,7 @@ public class TransactionControllerImpl implements TransactionController {
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
-
-        return ResponseEntity.ok(transactionService.getAccountTransactions(accountNumber, type, startDate, endDate));
+        log.info("REST İsteği: Hesap hareketleri (Ekstre) sorgulanıyor. Hesap No: {}", accountNumber);
+        return ResponseEntity.ok(ITransactionService.getAccountTransactions(accountNumber, type, startDate, endDate));
     }
 }

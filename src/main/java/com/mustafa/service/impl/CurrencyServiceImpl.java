@@ -2,12 +2,14 @@ package com.mustafa.service.impl;
 
 import com.mustafa.dto.response.ExchangeRateResponse;
 import com.mustafa.exception.BankOperationException;
-import com.mustafa.service.CurrencyService;
+import com.mustafa.service.ICurrencyService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+@Slf4j // 🚀 LOGGER AKTİF
 @Service
-public class CurrencyServiceImpl implements CurrencyService {
+public class CurrencyServiceImpl implements ICurrencyService {
 
     // Spring'in dış dünyayla konuşmasını sağlayan HTTP aracı
     private final RestTemplate restTemplate = new RestTemplate();
@@ -17,17 +19,26 @@ public class CurrencyServiceImpl implements CurrencyService {
         // Ücretsiz ve API Key istemeyen kur sağlayıcısı
         String url = "https://open.er-api.com/v6/latest/" + baseCurrency.toUpperCase();
 
+        log.info("Dış API İsteği: {} bazlı canlı döviz kurları çekiliyor... [URL: {}]", baseCurrency.toUpperCase(), url);
+
         try {
             // Dış API'ye GET isteği at ve gelen JSON'ı bizim DTO'ya dönüştür
-            return restTemplate.getForObject(url, ExchangeRateResponse.class);
+            ExchangeRateResponse response = restTemplate.getForObject(url, ExchangeRateResponse.class);
+            log.info("Canlı kurlar başarıyla çekildi. Sağlayıcı yanıt verdi.");
+            return response;
         } catch (Exception e) {
+            // 🚀 EĞER API ÇÖKERSE EN BÜYÜK KANITIMIZ BURASI:
+            log.error("🚨 DIŞ API BAĞLANTI HATASI: Canlı kurlar çekilemedi! Hata Detayı: {}", e.getMessage());
             throw new BankOperationException("Canlı kurlar çekilirken bir hata oluştu: " + e.getMessage());
         }
     }
 
     @Override
     public Double convertAmount(Double amount, String fromCurrency, String toCurrency) {
+        log.info("Döviz çevirim motoru çalıştı: {} {} -> {}", amount, fromCurrency.toUpperCase(), toCurrency.toUpperCase());
+
         if (fromCurrency.equalsIgnoreCase(toCurrency)) {
+            log.info("Çevirim İptali: Kaynak ve hedef para birimleri aynı ({}). İşlem yapılmadı.", fromCurrency.toUpperCase());
             return amount; // Aynı birimse çevirme yapma
         }
 
@@ -38,10 +49,16 @@ public class CurrencyServiceImpl implements CurrencyService {
         Double rate = response.getRates().get(toCurrency.toUpperCase());
 
         if (rate == null) {
+            log.warn("Çevirim Başarısız: Hedeflenen para birimi ({}) sistemde veya dış API'de desteklenmiyor!", toCurrency.toUpperCase());
             throw new BankOperationException("Desteklenmeyen para birimi: " + toCurrency);
         }
 
-        // 3. Miktarı kurla çarp ve dön (Örn: 1000 TRY * 0.030 USD)
-        return amount * rate;
+        // 3. Miktarı kurla çarp ve dön
+        Double result = amount * rate;
+
+        log.info("✅ Çevirim Başarılı: {} {} = {} {} (Uygulanan Kur Çarpanı: {})",
+                amount, fromCurrency.toUpperCase(), String.format("%.2f", result), toCurrency.toUpperCase(), rate);
+
+        return result;
     }
 }

@@ -1,8 +1,10 @@
 package com.mustafa.controller;
 
+import com.mustafa.dto.request.AutoPaymentSettingsRequest;
 import com.mustafa.dto.request.HireEmployeeRequest;
 import com.mustafa.dto.request.SalaryPaymentRequest;
 import com.mustafa.dto.request.UpdateEmployeeRequest;
+import com.mustafa.dto.response.AutoPaymentSettingsResponse;
 import com.mustafa.dto.response.CompanyEmployeeResponse;
 import com.mustafa.dto.response.TransactionResponse;
 import jakarta.validation.Valid;
@@ -14,7 +16,7 @@ import java.security.Principal;
 import java.util.List;
 import java.util.Map;
 
-public interface CompanyEmployeeController {
+public interface ICompanyEmployeeController {
 
     ResponseEntity<CompanyEmployeeResponse> hireEmployee(Principal principal, @Valid @RequestBody HireEmployeeRequest request);
 
@@ -32,4 +34,11 @@ public interface CompanyEmployeeController {
     ResponseEntity<List<TransactionResponse>> paySalaries(
             Principal principal,
             @Valid @RequestBody SalaryPaymentRequest request);
+
+    // 🚀 YENİ EKLENEN KAPI İMZASI
+    ResponseEntity<AutoPaymentSettingsResponse> updateAutoPaymentSettings(
+            Principal principal,
+            @Valid @RequestBody AutoPaymentSettingsRequest request);
+
+    ResponseEntity<AutoPaymentSettingsResponse> getAutoPaymentSettings(Principal principal);
 }

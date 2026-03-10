@@ -2,7 +2,7 @@ package com.mustafa.service;
 
 import com.mustafa.dto.response.ExchangeRateResponse;
 
-public interface CurrencyService {
+public interface ICurrencyService {
     // Belirli bir para birimine (Örn: TRY) göre canlı kurları getirir
     ExchangeRateResponse getLiveRates(String baseCurrency);
 

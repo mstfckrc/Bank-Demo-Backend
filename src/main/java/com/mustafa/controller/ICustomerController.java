@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import java.util.Map;
 
-public interface CustomerController {
+public interface ICustomerController {
     ResponseEntity<UserProfileResponse> getMyProfile();
     ResponseEntity<UserProfileResponse> updateProfile(@RequestBody UpdateProfileRequest request);
     ResponseEntity<Map<String, String>> changePassword(@RequestBody ChangePasswordRequest request);

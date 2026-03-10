@@ -5,7 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.List;
 import java.util.Optional;
 
-public interface CompanyEmployeeRepository extends JpaRepository<CompanyEmployee, Long> {
+public interface ICompanyEmployeeRepository extends JpaRepository<CompanyEmployee, Long> {
     // Bir şirketin tüm çalışanlarını getirmek için:
     List<CompanyEmployee> findByCompanyId(Long companyId);
 

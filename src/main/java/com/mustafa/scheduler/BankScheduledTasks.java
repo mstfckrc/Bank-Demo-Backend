@@ -1,34 +1,80 @@
 package com.mustafa.scheduler;
 
+import com.mustafa.entity.BillPaymentInstruction;
+import com.mustafa.entity.Company;
+import com.mustafa.repository.IBillPaymentInstructionRepository;
+import com.mustafa.repository.ICompanyRepository;
+import com.mustafa.service.IBillPaymentService;
+import com.mustafa.service.ICompanyEmployeeService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 
-@Slf4j // 🚀 LOGGER GÜCÜ (Konsola renkli ve detaylı log basmak için)
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class BankScheduledTasks {
 
-    // İleride buraya private final CompanyEmployeeService vs. enjekte edeceğiz.
+    private final ICompanyRepository ICompanyRepository;
+    private final ICompanyEmployeeService ICompanyEmployeeService;
+    private final IBillPaymentInstructionRepository IBillPaymentInstructionRepository;
+    private final IBillPaymentService IBillPaymentService;
 
-    /**
-     * CRON MANTIĞI: Saniye | Dakika | Saat | Gün | Ay | Haftanın Günü
-     * Örnek: "0 22 17 * * *" -> Her gün saat 17:22:00'da çalışır.
-     * * ⚠️ DİKKAT: Aşağıdaki '22' ve '17' rakamlarını şu anki saatinden 1-2 dakika sonrasına ayarla!
-     */
-    @Scheduled(cron = "0 24 17 * * *")
-    public void testScheduledTask() {
+    @Scheduled(cron = "0 * * * * *") // Şimdilik test için dakikada bir çalışsın
+    public void processDailyBankOperations() {
+        int today = LocalDate.now().getDayOfMonth();
+
+        // 1. Veritabanından bugünün işlerini topla
+        List<Company> companiesToPay = ICompanyRepository.findByAutoSalaryPaymentEnabledTrueAndSalaryPaymentDay(today);
+        List<BillPaymentInstruction> billsToPay = IBillPaymentInstructionRepository.findByIsActiveTrueAndPaymentDay(today);
+
+        // Eğer bugün hiçbir iş yoksa konsolu gereksiz loglarla kirletme
+        if (companiesToPay.isEmpty() && billsToPay.isEmpty()) {
+            return;
+        }
+
         String currentTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"));
 
-        // System.out.println yerine kurumsal standart olan log.info kullanıyoruz
         log.info("=====================================================");
-        log.info("🚀 [OTOMASYON TETİKLENDİ] Saat: {}", currentTime);
-        log.info("🛡️ Arka plan taraması yapılıyor...");
-        log.info("💸 İleride buraya otomatik maaş ödemeleri, günlük kur güncellemeleri gelecek!");
+        log.info("🚀 [BANKA OTOMASYON MOTORU] Uyandı. Saat: {}, Gün: {}", currentTime, today);
+
+        // --- 1. MAAŞ OPERASYONU ---
+        if (!companiesToPay.isEmpty()) {
+            log.info("🏢 [MAAŞ] Toplam {} şirketin maaş ödemesi başlatılıyor...", companiesToPay.size());
+
+            for (Company company : companiesToPay) {
+                try {
+                    ICompanyEmployeeService.paySalariesAutomatically(company.getId(), company.getDefaultSalaryIban());
+                    log.info("  ✅ BAŞARILI: {} şirketinin personellerine maaşları aktarıldı.", company.getCompanyName());
+                } catch (Exception e) {
+                    log.error("  ❌ HATA: {} şirketinin otomatik maaş ödemesi BAŞARISIZ! Sebep: {}", company.getCompanyName(), e.getMessage());
+                }
+            }
+        }
+
+        // --- 2. FATURA OPERASYONU ---
+        if (!billsToPay.isEmpty()) {
+            log.info("🧾 [FATURA] Toplam {} adet fatura talimatı işleniyor...", billsToPay.size());
+
+            for (BillPaymentInstruction instruction : billsToPay) {
+                try {
+                    com.mustafa.dto.response.TransactionResponse response = IBillPaymentService.payBillAutomatically(instruction.getId());
+                    if (response != null) {
+                        log.info("  ✅ BAŞARILI: Abone {} faturası ödendi. Dekont: {}", instruction.getSubscriberNo(), response.getReferenceNo());
+                    }
+                } catch (Exception e) {
+                    log.error("  ⚠️ HATA: Fatura Talimatı (Abone: {}) Başarısız: {}", instruction.getSubscriberNo(), e.getMessage());
+                }
+            }
+        }
+
+        log.info("🛡️ Motor tüm görevlerini tamamladı ve uyku moduna geçiyor...");
         log.info("=====================================================");
     }
 }

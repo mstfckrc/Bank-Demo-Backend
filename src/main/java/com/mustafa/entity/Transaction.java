@@ -71,7 +71,8 @@ public class Transaction {
     public enum TransactionType {
         DEPOSIT,    // Para Yatırma
         WITHDRAWAL, // Para Çekme
-        TRANSFER,    // Havale / EFT
-        SALARY // 🚀 MAAŞ
+        TRANSFER,   // Havale / EFT
+        SALARY,     // MAAŞ
+        BILL_PAYMENT // 🚀 YENİ EKLENEN: Fatura Ödemesi
     }
 }

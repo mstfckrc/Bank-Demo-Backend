@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 
 import java.util.List;
 
-public interface TransactionController {
+public interface ITransactionController {
 
     // Hesaba dışarıdan (ATM) para yatırma
     ResponseEntity<TransactionResponse> deposit(@Valid @RequestBody DepositRequest request);
