@@ -1,5 +1,6 @@
 package com.mustafa.scheduler;
 
+import com.mustafa.dto.response.TransactionResponse;
 import com.mustafa.entity.BillPaymentInstruction;
 import com.mustafa.entity.Company;
 import com.mustafa.repository.IBillPaymentInstructionRepository;
@@ -64,7 +65,7 @@ public class BankScheduledTasks {
 
             for (BillPaymentInstruction instruction : billsToPay) {
                 try {
-                    com.mustafa.dto.response.TransactionResponse response = billPaymentService.payBillAutomatically(instruction.getId());
+                    TransactionResponse response = billPaymentService.payBillAutomatically(instruction.getId());
                     if (response != null) {
                         log.info("  ✅ BAŞARILI: Abone {} faturası ödendi. Dekont: {}", instruction.getSubscriberNo(), response.getReferenceNo());
                     }

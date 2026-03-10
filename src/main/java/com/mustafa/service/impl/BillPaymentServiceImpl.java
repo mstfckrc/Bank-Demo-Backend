@@ -56,7 +56,7 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
 
         Account account = instruction.getAccount();
         if (!account.isActive()) {
-            throw new BankOperationException("Faturaya bağlı kasa pasif durumda!");
+            throw new BankOperationException("Faturaya bağlı hesap pasif durumda!");
         }
 
         // 2. DIŞ KURUMA BORÇ SOR (Interface üzerinden)
