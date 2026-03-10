@@ -30,11 +30,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdminServiceImpl implements IAdminService {
 
-    private final IAppUserRepository IAppUserRepository;
-    private final IRetailCustomerRepository IRetailCustomerRepository;
-    private final ICompanyRepository ICompanyRepository;
-    private final IAccountRepository IAccountRepository;
-    private final ITransactionRepository ITransactionRepository;
+    private final IAppUserRepository appUserRepository;
+    private final IRetailCustomerRepository retailCustomerRepository;
+    private final ICompanyRepository companyRepository;
+    private final IAccountRepository accountRepository;
+    private final ITransactionRepository transactionRepository;
 
     // 🚀 KVKK Maskeleme Kalkanı
     private String maskIdentity(String identity) {
@@ -45,10 +45,10 @@ public class AdminServiceImpl implements IAdminService {
     // Ortak Yardımcı Metot: Şirket veya Bireyin ismini bulur
     private String getOwnerName(AppUser appUser) {
         if (appUser.getRole() == AppUser.Role.RETAIL_CUSTOMER) {
-            return IRetailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
+            return retailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
                     .map(r -> r.getFirstName() + " " + r.getLastName()).orElse("Bilinmeyen Birey");
         } else if (appUser.getRole() == AppUser.Role.CORPORATE_MANAGER) {
-            return ICompanyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
+            return companyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
                     .map(Company::getCompanyName).orElse("Bilinmeyen Şirket");
         }
         return "Sistem Yöneticisi";
@@ -57,10 +57,10 @@ public class AdminServiceImpl implements IAdminService {
     // Ortak Yardımcı Metot: Email adresini bulur
     private String getOwnerEmail(AppUser appUser) {
         if (appUser.getRole() == AppUser.Role.RETAIL_CUSTOMER) {
-            return IRetailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
+            return retailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
                     .map(RetailCustomer::getEmail).orElse("");
         } else if (appUser.getRole() == AppUser.Role.CORPORATE_MANAGER) {
-            return ICompanyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
+            return companyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
                     .map(Company::getContactEmail).orElse("");
         }
         return "admin@bank.com";
@@ -70,7 +70,7 @@ public class AdminServiceImpl implements IAdminService {
     @Transactional(readOnly = true)
     public List<AccountResponse> getAllAccounts() {
         log.info("Admin İşlemi: Sistemdeki tüm hesaplar veritabanından çekiliyor.");
-        return IAccountRepository.findAll().stream()
+        return accountRepository.findAll().stream()
                 .map(account -> AccountResponse.builder()
                         .id(account.getId())
                         .accountNumber(account.getAccountNumber())
@@ -89,7 +89,7 @@ public class AdminServiceImpl implements IAdminService {
     public List<AccountResponse> getCustomerAccounts(String identityNumber) {
         String maskedId = maskIdentity(identityNumber);
 
-        AppUser appUser = IAppUserRepository.findByIdentityNumber(identityNumber)
+        AppUser appUser = appUserRepository.findByIdentityNumber(identityNumber)
                 .orElseThrow(() -> {
                     log.warn("Admin İşlemi Başarısız: Hesapları sorgulanan müşteri ({}) bulunamadı!", maskedId);
                     return new BankOperationException("Kullanıcı bulunamadı!");
@@ -113,7 +113,7 @@ public class AdminServiceImpl implements IAdminService {
     @Override
     public List<UserProfileResponse> getAllCustomers() {
         log.info("Admin İşlemi: Sistemdeki tüm müşteri profilleri veritabanından çekiliyor.");
-        return IAppUserRepository.findAll().stream()
+        return appUserRepository.findAll().stream()
                 .map(appUser -> UserProfileResponse.builder()
                         .identityNumber(appUser.getIdentityNumber())
                         .profileName(getOwnerName(appUser))
@@ -129,13 +129,13 @@ public class AdminServiceImpl implements IAdminService {
     public void deleteCustomer(String identityNumber) {
         String maskedId = maskIdentity(identityNumber);
 
-        AppUser appUser = IAppUserRepository.findByIdentityNumber(identityNumber)
+        AppUser appUser = appUserRepository.findByIdentityNumber(identityNumber)
                 .orElseThrow(() -> {
                     log.warn("Admin İşlemi Başarısız: Silinmek istenen müşteri ({}) sistemde yok!", maskedId);
                     return new BankOperationException("Silinecek kullanıcı bulunamadı!");
                 });
 
-        IAppUserRepository.delete(appUser);
+        appUserRepository.delete(appUser);
         log.info("Admin İşlemi Başarılı: Müşteri ({}) ve bağlı tüm hesapları sistemden tamamen (Cascade) silindi.", maskedId);
     }
 
@@ -144,14 +144,14 @@ public class AdminServiceImpl implements IAdminService {
     public UserProfileResponse updateCustomer(String identityNumber, UpdateProfileRequest request) {
         String maskedId = maskIdentity(identityNumber);
 
-        AppUser appUser = IAppUserRepository.findByIdentityNumber(identityNumber)
+        AppUser appUser = appUserRepository.findByIdentityNumber(identityNumber)
                 .orElseThrow(() -> {
                     log.warn("Admin İşlemi Başarısız: Profili güncellenmek istenen müşteri ({}) bulunamadı!", maskedId);
                     return new BankOperationException("Güncellenecek kullanıcı bulunamadı!");
                 });
 
         if (appUser.getRole() == AppUser.Role.RETAIL_CUSTOMER) {
-            RetailCustomer retail = IRetailCustomerRepository.findByAppUser_IdentityNumber(identityNumber).get();
+            RetailCustomer retail = retailCustomerRepository.findByAppUser_IdentityNumber(identityNumber).get();
 
             if (request.getEmail() != null && !request.getEmail().isBlank()) {
                 retail.setEmail(request.getEmail());
@@ -169,10 +169,10 @@ public class AdminServiceImpl implements IAdminService {
                     retail.setLastName(fullName.substring(lastSpaceIndex + 1).trim());
                 }
             }
-            IRetailCustomerRepository.save(retail);
+            retailCustomerRepository.save(retail);
 
         } else if (appUser.getRole() == AppUser.Role.CORPORATE_MANAGER) {
-            Company company = ICompanyRepository.findByAppUser_IdentityNumber(identityNumber).get();
+            Company company = companyRepository.findByAppUser_IdentityNumber(identityNumber).get();
 
             if (request.getEmail() != null && !request.getEmail().isBlank()) {
                 company.setContactEmail(request.getEmail());
@@ -181,7 +181,7 @@ public class AdminServiceImpl implements IAdminService {
             if (request.getProfileName() != null && !request.getProfileName().isBlank()) {
                 company.setCompanyName(request.getProfileName().trim());
             }
-            ICompanyRepository.save(company);
+            companyRepository.save(company);
         }
 
         log.info("Admin İşlemi Başarılı: Müşteri ({}) profil bilgileri güncellendi.", maskedId);
@@ -197,7 +197,7 @@ public class AdminServiceImpl implements IAdminService {
 
     @Override
     public List<TransactionResponse> getAccountTransactions(String accountNumber) {
-        Account account = IAccountRepository.findByAccountNumber(accountNumber)
+        Account account = accountRepository.findByAccountNumber(accountNumber)
                 .orElseThrow(() -> {
                     log.warn("Admin İşlemi Başarısız: İşlem geçmişi istenen hesap ({}) bulunamadı!", accountNumber);
                     return new BankOperationException("Hesap bulunamadı!");
@@ -205,7 +205,7 @@ public class AdminServiceImpl implements IAdminService {
 
         log.info("Admin İşlemi: Hesabın ({}) geçmiş transferleri getiriliyor.", accountNumber);
 
-        List<Transaction> transactions = ITransactionRepository
+        List<Transaction> transactions = transactionRepository
                 .findBySenderAccountIdOrReceiverAccountIdOrderByTransactionDateDesc(account.getId(), account.getId());
 
         return transactions.stream().map(transaction -> TransactionResponse.builder()
@@ -226,7 +226,7 @@ public class AdminServiceImpl implements IAdminService {
     public AccountResponse openAccountForCustomer(String identityNumber, OpenAccountRequest request) {
         String maskedId = maskIdentity(identityNumber);
 
-        AppUser appUser = IAppUserRepository.findByIdentityNumber(identityNumber)
+        AppUser appUser = appUserRepository.findByIdentityNumber(identityNumber)
                 .orElseThrow(() -> {
                     log.warn("Admin İşlemi Başarısız: Hesap açılacak müşteri ({}) bulunamadı!", maskedId);
                     return new BankOperationException("Kullanıcı bulunamadı!");
@@ -253,7 +253,7 @@ public class AdminServiceImpl implements IAdminService {
                 .currency(accountCurrency)
                 .build();
 
-        Account savedAccount = IAccountRepository.save(newAccount);
+        Account savedAccount = accountRepository.save(newAccount);
         log.info("Admin İşlemi Başarılı: Müşteriye ({}) yeni hesap (No: {}, Döviz: {}) açıldı.", maskedId, generatedAccountNumber, accountCurrency);
 
         return AccountResponse.builder()
@@ -273,14 +273,14 @@ public class AdminServiceImpl implements IAdminService {
     public void updateCustomerStatus(String identityNumber, String status) {
         String maskedId = maskIdentity(identityNumber);
 
-        AppUser appUser = IAppUserRepository.findByIdentityNumber(identityNumber)
+        AppUser appUser = appUserRepository.findByIdentityNumber(identityNumber)
                 .orElseThrow(() -> {
                     log.warn("Admin İşlemi Başarısız: Onay durumu değiştirilecek müşteri ({}) bulunamadı!", maskedId);
                     return new BankOperationException("Kullanıcı bulunamadı!");
                 });
 
         appUser.setStatus(AppUser.ApprovalStatus.valueOf(status.toUpperCase()));
-        IAppUserRepository.save(appUser);
+        appUserRepository.save(appUser);
 
         log.info("Admin İşlemi Başarılı: Müşterinin ({}) sistem durumu [{}] olarak güncellendi.", maskedId, status.toUpperCase());
     }

@@ -30,9 +30,9 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class TransactionServiceImpl implements ITransactionService {
 
-    private final IAccountRepository IAccountRepository;
-    private final ITransactionRepository ITransactionRepository;
-    private final ICurrencyService ICurrencyService;
+    private final IAccountRepository accountRepository;
+    private final ITransactionRepository transactionRepository;
+    private final ICurrencyService currencyService;
 
     private static final BigDecimal TRANSACTION_LIMIT = new BigDecimal("50000");
 
@@ -50,7 +50,7 @@ public class TransactionServiceImpl implements ITransactionService {
         log.info("Para yatırma işlemi başlatıldı. Kullanıcı: {}, IBAN: {}, Tutar: {}", maskedId, request.getIban(), request.getAmount());
 
         // 🚀 DÜZELTME: Hesap bulunamazsa artık sessizce çökmek yerine loga (Telsize) haber verecek!
-        Account account = IAccountRepository.findByIban(request.getIban())
+        Account account = accountRepository.findByIban(request.getIban())
                 .orElseThrow(() -> {
                     log.warn("Para yatırma reddedildi: Belirtilen hedef hesap (IBAN: {}) sistemde bulunamadı!", request.getIban());
                     return new BankOperationException("Hesap bulunamadı!");
@@ -72,7 +72,7 @@ public class TransactionServiceImpl implements ITransactionService {
         }
 
         account.setBalance(account.getBalance().add(request.getAmount()));
-        IAccountRepository.save(account);
+        accountRepository.save(account);
 
         Transaction transaction = Transaction.builder()
                 .referenceNo(UUID.randomUUID().toString())
@@ -83,7 +83,7 @@ public class TransactionServiceImpl implements ITransactionService {
                 .description("Kendi Hesabına Para Yatırma")
                 .build();
 
-        ITransactionRepository.save(transaction);
+        transactionRepository.save(transaction);
         log.info("✅ Para yatırma işlemi başarıyla tamamlandı. Referans: {}", transaction.getReferenceNo());
 
         return mapToResponse(transaction);
@@ -98,14 +98,14 @@ public class TransactionServiceImpl implements ITransactionService {
         log.info("Transfer süreci başlatıldı. Gönderen: {}, Alıcı IBAN: {}, Tutar: {}", maskedId, request.getReceiverIban(), request.getAmount());
 
         // 🚀 DÜZELTME: Gönderen hesap hatası loglandı
-        Account senderAccount = IAccountRepository.findByIban(request.getSenderIban())
+        Account senderAccount = accountRepository.findByIban(request.getSenderIban())
                 .orElseThrow(() -> {
                     log.warn("Transfer iptali: Gönderici IBAN ({}) veritabanında bulunamadı!", request.getSenderIban());
                     return new BankOperationException("Gönderen hesap bulunamadı!");
                 });
 
         // 🚀 DÜZELTME: Alıcı hesap (Örn: "askjdaskd") hatası loglandı
-        Account receiverAccount = IAccountRepository.findByIban(request.getReceiverIban())
+        Account receiverAccount = accountRepository.findByIban(request.getReceiverIban())
                 .orElseThrow(() -> {
                     log.warn("Transfer iptali: Hedef alınan alıcı IBAN ({}) sistemde kayıtlı değil!", request.getReceiverIban());
                     return new BankOperationException("Alıcı hesap bulunamadı!");
@@ -145,7 +145,7 @@ public class TransactionServiceImpl implements ITransactionService {
         senderAccount.setBalance(senderAccount.getBalance().subtract(request.getAmount()));
 
         // 2. Canlı Kur Çevirimi
-        Double convertedAmountDouble = ICurrencyService.convertAmount(
+        Double convertedAmountDouble = currencyService.convertAmount(
                 request.getAmount().doubleValue(),
                 senderAccount.getCurrency().toString(),
                 receiverAccount.getCurrency().toString()
@@ -162,7 +162,7 @@ public class TransactionServiceImpl implements ITransactionService {
 
         // 3. MASAK KONTROLÜ VE İŞLEM TİPİ BELİRLEME
         Transaction.TransactionStatus status;
-        Double amountInTryDouble = ICurrencyService.convertAmount(
+        Double amountInTryDouble = currencyService.convertAmount(
                 request.getAmount().doubleValue(),
                 senderAccount.getCurrency().toString(),
                 "TRY"
@@ -177,14 +177,14 @@ public class TransactionServiceImpl implements ITransactionService {
 
         if (!request.isSalaryPayment() && amountInTry.compareTo(TRANSACTION_LIMIT) >= 0) {
             log.warn("🚨 MASAK LİMİTİ AŞILDI! İşlem büyüklüğü: ~{} TRY. İşlem Admin onayına (PENDING_APPROVAL) bekletilmek üzere donduruldu.", String.format("%.2f", amountInTryDouble));
-            IAccountRepository.save(senderAccount);
+            accountRepository.save(senderAccount);
             status = Transaction.TransactionStatus.PENDING_APPROVAL;
             enrichedDescription += String.format(" - [YÜKLÜ İŞLEM: Yaklaşık %.2f TL - YÖNETİCİ ONAYI BEKLİYOR]", amountInTryDouble);
         } else {
             log.info("İşlem limitler dahilinde. Otomatik transfer onayı verildi.");
             receiverAccount.setBalance(receiverAccount.getBalance().add(convertedAmount));
-            IAccountRepository.save(senderAccount);
-            IAccountRepository.save(receiverAccount);
+            accountRepository.save(senderAccount);
+            accountRepository.save(receiverAccount);
             status = Transaction.TransactionStatus.COMPLETED;
         }
 
@@ -200,7 +200,7 @@ public class TransactionServiceImpl implements ITransactionService {
                 .description(enrichedDescription)
                 .build();
 
-        ITransactionRepository.save(transaction);
+        transactionRepository.save(transaction);
         log.info("✅ İşlem kaydı başarıyla oluşturuldu. Durum: {}, Referans: {}", status, transaction.getReferenceNo());
 
         return mapToResponse(transaction);
@@ -210,7 +210,7 @@ public class TransactionServiceImpl implements ITransactionService {
     public List<TransactionResponse> getAccountTransactions(String accountNumber, String type, String startDate, String endDate) {
 
         // 🚀 DÜZELTME: Ekstre çekerken hesap bulunamazsa logla
-        Account account = IAccountRepository.findByAccountNumber(accountNumber)
+        Account account = accountRepository.findByAccountNumber(accountNumber)
                 .orElseThrow(() -> {
                     log.warn("Ekstre iptali: Sorgulanan hesap numarası ({}) bulunamadı!", accountNumber);
                     return new BankOperationException("Hesap bulunamadı!");
@@ -224,7 +224,7 @@ public class TransactionServiceImpl implements ITransactionService {
 
         log.info("Hesap ekstresi çekiliyor. Hesap No: {}, Filtreler -> Tip: {}, Tarih: {} - {}", accountNumber, type, startDate, endDate);
 
-        List<Transaction> transactions = ITransactionRepository
+        List<Transaction> transactions = transactionRepository
                 .findBySenderAccountIdOrReceiverAccountIdOrderByTransactionDateDesc(account.getId(), account.getId());
 
         Stream<Transaction> stream = transactions.stream();
@@ -249,7 +249,7 @@ public class TransactionServiceImpl implements ITransactionService {
     @Override
     public List<TransactionResponse> getAllTransactionsForAdmin(String status) {
         log.info("Admin İşlemi: Sistemdeki tüm transfer kayıtları sorgulanıyor. Filtre: {}", status != null ? status : "TÜMÜ");
-        Stream<Transaction> stream = ITransactionRepository.findAll().stream()
+        Stream<Transaction> stream = transactionRepository.findAll().stream()
                 .sorted((t1, t2) -> t2.getTransactionDate().compareTo(t1.getTransactionDate()));
 
         if (status != null && !status.isBlank()) {
@@ -264,7 +264,7 @@ public class TransactionServiceImpl implements ITransactionService {
         log.info("Admin İşlemi: MASAK limitine takılan işlem ({}) için ONAY süreci başlatıldı...", referenceNo);
 
         // 🚀 DÜZELTME: Admin işlem bulamazsa logla
-        Transaction transaction = ITransactionRepository.findByReferenceNo(referenceNo)
+        Transaction transaction = transactionRepository.findByReferenceNo(referenceNo)
                 .orElseThrow(() -> {
                     log.warn("Admin Onay Hatası: Onaylanmak istenen işlem ({}) bulunamadı!", referenceNo);
                     return new BankOperationException("İşlem bulunamadı!");
@@ -277,12 +277,12 @@ public class TransactionServiceImpl implements ITransactionService {
 
         Account receiver = transaction.getReceiverAccount();
         receiver.setBalance(receiver.getBalance().add(transaction.getConvertedAmount()));
-        IAccountRepository.save(receiver);
+        accountRepository.save(receiver);
 
         transaction.setStatus(Transaction.TransactionStatus.COMPLETED);
         String updatedDesc = transaction.getDescription().replace(" - [YÜKLÜ İŞLEM: YÖNETİCİ ONAYI BEKLİYOR]", "") + " - [ONAYLANDI]";
         transaction.setDescription(updatedDesc);
-        ITransactionRepository.save(transaction);
+        transactionRepository.save(transaction);
 
         log.info("✅ Admin İşlemi Başarılı: İşlem ({}) ONAYLANDI ve para alıcı hesaba geçirildi.", referenceNo);
         return mapToResponse(transaction);
@@ -294,7 +294,7 @@ public class TransactionServiceImpl implements ITransactionService {
         log.info("Admin İşlemi: MASAK limitine takılan işlem ({}) için RED süreci başlatıldı...", referenceNo);
 
         // 🚀 DÜZELTME: Admin işlem bulamazsa logla
-        Transaction transaction = ITransactionRepository.findByReferenceNo(referenceNo)
+        Transaction transaction = transactionRepository.findByReferenceNo(referenceNo)
                 .orElseThrow(() -> {
                     log.warn("Admin Ret Hatası: Reddedilmek istenen işlem ({}) bulunamadı!", referenceNo);
                     return new BankOperationException("İşlem bulunamadı!");
@@ -307,12 +307,12 @@ public class TransactionServiceImpl implements ITransactionService {
 
         Account sender = transaction.getSenderAccount();
         sender.setBalance(sender.getBalance().add(transaction.getAmount()));
-        IAccountRepository.save(sender);
+        accountRepository.save(sender);
 
         transaction.setStatus(Transaction.TransactionStatus.REJECTED);
         String updatedDesc = transaction.getDescription().replace(" - [YÜKLÜ İŞLEM: YÖNETİCİ ONAYI BEKLİYOR]", "") + " - [REDDEDİLDİ VE İADE EDİLDİ]";
         transaction.setDescription(updatedDesc);
-        ITransactionRepository.save(transaction);
+        transactionRepository.save(transaction);
 
         log.info("🚫 Admin İşlemi Başarılı: İşlem ({}) REDDEDİLDİ ve dondurulan tutar göndericiye iade edildi.", referenceNo);
         return mapToResponse(transaction);

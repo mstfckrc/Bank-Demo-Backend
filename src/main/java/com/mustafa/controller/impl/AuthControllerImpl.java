@@ -18,20 +18,20 @@ import org.springframework.web.bind.annotation.PostMapping;
 @RequiredArgsConstructor
 public class AuthControllerImpl implements IAuthController {
 
-    private final IAuthService IAuthService;
+    private final IAuthService authService;
 
     @Override
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(RegisterRequest request) {
         // Hangi rolle kayıt olmak istediğini logluyoruz
         log.info("REST İsteği: Yeni kullanıcı kaydı başlatılıyor. İstenen Rol: {}", request.getRole());
-        return ResponseEntity.ok(IAuthService.register(request));
+        return ResponseEntity.ok(authService.register(request));
     }
 
     @Override
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(LoginRequest request) {
         log.info("REST İsteği: Kullanıcı giriş (Login) talebi alındı.");
-        return ResponseEntity.ok(IAuthService.login(request));
+        return ResponseEntity.ok(authService.login(request));
     }
 }

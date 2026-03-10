@@ -20,27 +20,27 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CustomerControllerImpl implements ICustomerController {
 
-    private final ICustomerService ICustomerService;
+    private final ICustomerService customerService;
 
     @GetMapping("/profile")
     @Override
     public ResponseEntity<UserProfileResponse> getMyProfile() {
         log.info("REST İsteği: Kullanıcı kendi profil bilgilerini sorguluyor.");
-        return ResponseEntity.ok(ICustomerService.getMyProfile());
+        return ResponseEntity.ok(customerService.getMyProfile());
     }
 
     @PutMapping("/profile")
     @Override
     public ResponseEntity<UserProfileResponse> updateProfile(@Valid @RequestBody UpdateProfileRequest request) {
         log.info("REST İsteği: Kullanıcı profil güncelleme talebinde bulundu.");
-        return ResponseEntity.ok(ICustomerService.updateProfile(request));
+        return ResponseEntity.ok(customerService.updateProfile(request));
     }
 
     @PutMapping("/password")
     @Override
     public ResponseEntity<Map<String, String>> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
         log.info("REST İsteği: Kullanıcı şifre değiştirme talebinde bulundu.");
-        ICustomerService.changePassword(request);
+        customerService.changePassword(request);
         Map<String, String> response = new HashMap<>();
         response.put("message", "Şifreniz başarıyla güncellendi.");
         return ResponseEntity.ok(response);
@@ -50,7 +50,7 @@ public class CustomerControllerImpl implements ICustomerController {
     @Override
     public ResponseEntity<Map<String, String>> appealRejection() {
         log.info("REST İsteği: Reddedilen kullanıcı yeniden değerlendirme (appeal) talebinde bulundu.");
-        ICustomerService.appealRejection();
+        customerService.appealRejection();
         Map<String, String> response = new HashMap<>();
         response.put("message", "Yeniden değerlendirme talebiniz alınmıştır.");
         return ResponseEntity.ok(response);

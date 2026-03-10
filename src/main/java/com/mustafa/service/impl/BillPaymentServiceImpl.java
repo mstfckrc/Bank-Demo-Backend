@@ -29,10 +29,10 @@ import java.util.UUID;
 public class BillPaymentServiceImpl implements IBillPaymentService {
 
     private final IBillPaymentInstructionRepository instructionRepository;
-    private final IAccountRepository IAccountRepository;
-    private final ITransactionRepository ITransactionRepository;
-    private final ICurrencyService ICurrencyService;
-    private final IExternalBillService IExternalBillService; // 🚀 HATA VEREN YER DÜZELDİ
+    private final IAccountRepository accountRepository;
+    private final ITransactionRepository transactionRepository;
+    private final ICurrencyService currencyService;
+    private final IExternalBillService externalBillService; // 🚀 HATA VEREN YER DÜZELDİ
 
     // KVKK Maskeleme Kalkanı
     private String maskIdentity(String identity) {
@@ -60,12 +60,12 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
         }
 
         // 2. DIŞ KURUMA BORÇ SOR (Interface üzerinden)
-        BigDecimal debtInTry = IExternalBillService.getDebt(instruction.getSubscriberNo(), instruction.getBillType());
+        BigDecimal debtInTry = externalBillService.getDebt(instruction.getSubscriberNo(), instruction.getBillType());
 
         // 3. DÖVİZ KONTROLÜ
         BigDecimal debtInAccountCurrency = debtInTry;
         if (!account.getCurrency().name().equalsIgnoreCase("TRY")) {
-            Double converted = ICurrencyService.convertAmount(debtInTry.doubleValue(), "TRY", account.getCurrency().name());
+            Double converted = currencyService.convertAmount(debtInTry.doubleValue(), "TRY", account.getCurrency().name());
             debtInAccountCurrency = BigDecimal.valueOf(converted);
         }
 
@@ -77,7 +77,7 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
 
         // 5. PARAYI KASADAN KES
         account.setBalance(account.getBalance().subtract(debtInAccountCurrency));
-        IAccountRepository.save(account);
+        accountRepository.save(account);
 
         // 6. DEKONT OLUŞTUR
         String desc = String.format("%s Faturası (Abone: %s)", instruction.getBillType().name(), instruction.getSubscriberNo());
@@ -94,7 +94,7 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
                 .status(Transaction.TransactionStatus.COMPLETED)
                 .description(desc)
                 .build();
-        ITransactionRepository.save(transaction);
+        transactionRepository.save(transaction);
 
         // 7. TALİMATI GÜNCELLE
         instruction.setLastPaymentDate(LocalDate.now());
@@ -119,7 +119,7 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
     @Override
     @Transactional
     public BillInstructionResponse createInstruction(String identityNumber, BillInstructionRequest request) {
-        Account account = IAccountRepository.findById(request.getAccountId())
+        Account account = accountRepository.findById(request.getAccountId())
                 .orElseThrow(() -> new BankOperationException("Kasa bulunamadı!"));
 
         if (!account.getAppUser().getIdentityNumber().equals(identityNumber)) {

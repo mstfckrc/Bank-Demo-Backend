@@ -18,34 +18,34 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AccountControllerImpl implements IAccountController {
 
-    private final IAccountService IAccountService;
+    private final IAccountService accountService;
 
     @Override
     @PostMapping
     public ResponseEntity<AccountResponse> createAccount(CreateAccountRequest request) {
         log.info("REST İsteği: Yeni hesap açma talebi alındı. İstenen Döviz Cinsi: {}", request.getCurrency());
-        return new ResponseEntity<>(IAccountService.createAccount(request), HttpStatus.CREATED);
+        return new ResponseEntity<>(accountService.createAccount(request), HttpStatus.CREATED);
     }
 
     @Override
     @GetMapping
     public ResponseEntity<List<AccountResponse>> getMyAccounts() {
         log.info("REST İsteği: Kullanıcının hesap listesi sorgulanıyor.");
-        return ResponseEntity.ok(IAccountService.getMyAccounts());
+        return ResponseEntity.ok(accountService.getMyAccounts());
     }
 
     @Override
     @GetMapping("/{accountNumber}")
     public ResponseEntity<AccountResponse> getAccountByAccountNumber(@PathVariable String accountNumber) {
         log.info("REST İsteği: Hesap detayları sorgulanıyor. Hesap No: {}", accountNumber);
-        return ResponseEntity.ok(IAccountService.getAccountByAccountNumber(accountNumber));
+        return ResponseEntity.ok(accountService.getAccountByAccountNumber(accountNumber));
     }
 
     @Override
     @DeleteMapping("/{accountNumber}")
     public ResponseEntity<String> deleteAccount(@PathVariable String accountNumber) {
         log.info("REST İsteği: Hesap kapatma talebi alındı. Hesap No: {}", accountNumber);
-        IAccountService.deleteAccount(accountNumber);
+        accountService.deleteAccount(accountNumber);
         return ResponseEntity.ok("Hesap başarıyla kapatıldı.");
     }
 }

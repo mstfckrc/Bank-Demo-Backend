@@ -30,12 +30,12 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
-    private final ICompanyEmployeeRepository ICompanyEmployeeRepository;
-    private final ICompanyRepository ICompanyRepository;
-    private final IRetailCustomerRepository IRetailCustomerRepository;
-    private final IAccountRepository IAccountRepository;
-    private final ITransactionService ITransactionService;
-    private final ICurrencyService ICurrencyService;
+    private final ICompanyEmployeeRepository companyEmployeeRepository;
+    private final ICompanyRepository companyRepository;
+    private final IRetailCustomerRepository retailCustomerRepository;
+    private final IAccountRepository accountRepository;
+    private final ITransactionService transactionService;
+    private final ICurrencyService currencyService;
 
     // 🚀 KVKK Maskeleme Kalkanı
     private String maskIdentity(String identity) {
@@ -51,23 +51,23 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
         log.info("Personel işe alım süreci başlatıldı. Yönetici: {}, Personel Adayı: {}", maskedManagerId, maskedEmployeeId);
 
-        Company company = ICompanyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
+        Company company = companyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
                 .orElseThrow(() -> new BankOperationException("Kurumsal profil bulunamadı!"));
 
-        RetailCustomer employee = IRetailCustomerRepository.findByAppUser_IdentityNumber(request.getIdentityNumber())
+        RetailCustomer employee = retailCustomerRepository.findByAppUser_IdentityNumber(request.getIdentityNumber())
                 .orElseThrow(() -> {
                     log.warn("İşe alım reddedildi: Personel adayı ({}) sistemde kayıtlı değil.", maskedEmployeeId);
                     return new BankOperationException("Personel sisteme kayıtlı değil! Önce bireysel müşteri hesabı açmalıdır.");
                 });
 
-        boolean exists = ICompanyEmployeeRepository.existsByCompany_IdAndRetailCustomer_AppUser_IdentityNumber(
+        boolean exists = companyEmployeeRepository.existsByCompany_IdAndRetailCustomer_AppUser_IdentityNumber(
                 company.getId(), request.getIdentityNumber());
         if (exists) {
             log.warn("İşe alım reddedildi: Personel ({}) zaten bu şirkette çalışıyor.", maskedEmployeeId);
             throw new BankOperationException("Bu personel zaten şirketinizde kayıtlı!");
         }
 
-        Account account = IAccountRepository.findByIban(request.getSalaryIban())
+        Account account = accountRepository.findByIban(request.getSalaryIban())
                 .orElseThrow(() -> new BankOperationException("Girilen IBAN sistemimizde bulunamadı!"));
 
         if (!account.getAppUser().getIdentityNumber().equals(request.getIdentityNumber())) {
@@ -87,7 +87,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
         newEmployee.setSalaryAmount(request.getSalaryAmount());
         newEmployee.setSalaryIban(request.getSalaryIban());
 
-        CompanyEmployee savedEmployee = ICompanyEmployeeRepository.save(newEmployee);
+        CompanyEmployee savedEmployee = companyEmployeeRepository.save(newEmployee);
         log.info("İşe alım başarılı! Personel ({}), {} şirketine eklendi.", maskedEmployeeId, company.getCompanyName());
 
         return mapToResponse(savedEmployee);
@@ -96,10 +96,10 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
     @Override
     public List<CompanyEmployeeResponse> getMyEmployees(String managerIdentityNumber) {
         log.info("Personel listesi çekiliyor. Yönetici: {}", maskIdentity(managerIdentityNumber));
-        Company company = ICompanyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
+        Company company = companyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
                 .orElseThrow(() -> new BankOperationException("Kurumsal profil bulunamadı!"));
 
-        List<CompanyEmployee> employees = ICompanyEmployeeRepository.findByCompanyId(company.getId());
+        List<CompanyEmployee> employees = companyEmployeeRepository.findByCompanyId(company.getId());
 
         return employees.stream()
                 .map(this::mapToResponse)
@@ -114,15 +114,15 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
         log.info("Personel güncelleme işlemi başlatıldı. Yönetici: {}, Personel: {}", maskedManagerId, maskedEmployeeId);
 
-        Company company = ICompanyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
+        Company company = companyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
                 .orElseThrow(() -> new BankOperationException("Kurumsal profil bulunamadı!"));
 
-        CompanyEmployee employeeRecord = ICompanyEmployeeRepository
+        CompanyEmployee employeeRecord = companyEmployeeRepository
                 .findByCompany_IdAndRetailCustomer_AppUser_IdentityNumber(company.getId(), employeeIdentityNumber)
                 .orElseThrow(() -> new BankOperationException("Bu TC numarasına ait bir çalışanınız bulunamadı!"));
 
         if (!employeeRecord.getSalaryIban().equals(request.getSalaryIban())) {
-            Account account = IAccountRepository.findByIban(request.getSalaryIban())
+            Account account = accountRepository.findByIban(request.getSalaryIban())
                     .orElseThrow(() -> new BankOperationException("Girilen yeni IBAN sistemimizde bulunamadı!"));
 
             if (!account.getAppUser().getIdentityNumber().equals(employeeIdentityNumber)) {
@@ -137,7 +137,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
         }
 
         employeeRecord.setSalaryAmount(request.getSalaryAmount());
-        CompanyEmployee updatedEmployee = ICompanyEmployeeRepository.save(employeeRecord);
+        CompanyEmployee updatedEmployee = companyEmployeeRepository.save(employeeRecord);
 
         log.info("Personel ({}) maaş tutarı güncellendi. Yeni Tutar: {}", maskedEmployeeId, request.getSalaryAmount());
 
@@ -150,14 +150,14 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
         String maskedEmployeeId = maskIdentity(employeeIdentityNumber);
         log.info("Personel işten çıkarma işlemi başlatıldı. Yönetici: {}, Personel: {}", maskIdentity(managerIdentityNumber), maskedEmployeeId);
 
-        Company company = ICompanyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
+        Company company = companyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
                 .orElseThrow(() -> new BankOperationException("Kurumsal profil bulunamadı!"));
 
-        CompanyEmployee employeeRecord = ICompanyEmployeeRepository
+        CompanyEmployee employeeRecord = companyEmployeeRepository
                 .findByCompany_IdAndRetailCustomer_AppUser_IdentityNumber(company.getId(), employeeIdentityNumber)
                 .orElseThrow(() -> new BankOperationException("Bu TC numarasına ait bir çalışanınız bulunamadı!"));
 
-        ICompanyEmployeeRepository.delete(employeeRecord);
+        companyEmployeeRepository.delete(employeeRecord);
         log.info("Personel ({}) başarıyla şirketten çıkarıldı.", maskedEmployeeId);
     }
 
@@ -168,10 +168,10 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
         String maskedManagerId = maskIdentity(managerIdentityNumber);
         log.info("🔥 MANUEL MAAŞ DAĞITIMI TETİKLENDİ! Yönetici: {}, Çıkış Kasası: {}", maskedManagerId, request.getSenderIban());
 
-        Company company = ICompanyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
+        Company company = companyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
                 .orElseThrow(() -> new BankOperationException("Kurumsal profil bulunamadı!"));
 
-        Account senderAccount = IAccountRepository.findByIban(request.getSenderIban())
+        Account senderAccount = accountRepository.findByIban(request.getSenderIban())
                 .orElseThrow(() -> new BankOperationException("Ödeme yapılacak kasa bulunamadı!"));
 
         // 🛡️ SADECE BURADA GÜVENLİK VAR: Bu adam, bu kasanın sahibi mi?
@@ -189,10 +189,10 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
     public List<TransactionResponse> paySalariesAutomatically(Long companyId, String senderIban) {
         log.info("🤖 OTOMATİK MAAŞ DAĞITIMI TETİKLENDİ! Şirket ID: {}, Çıkış Kasası: {}", companyId, senderIban);
 
-        Company company = ICompanyRepository.findById(companyId)
+        Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new BankOperationException("Şirket bulunamadı!"));
 
-        Account senderAccount = IAccountRepository.findByIban(senderIban)
+        Account senderAccount = accountRepository.findByIban(senderIban)
                 .orElseThrow(() -> new BankOperationException("Otomatik ödeme için belirlenen kasa bulunamadı!"));
 
         // 🛡️ VEKALET SİSTEMİ (GHOST LOGIN): ITransactionService'in güvenlik duvarına takılmamak için
@@ -220,7 +220,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
             throw new BankOperationException("Seçilen kasa pasif durumdadır, işlem yapılamaz!");
         }
 
-        List<CompanyEmployee> employees = ICompanyEmployeeRepository.findByCompanyId(company.getId());
+        List<CompanyEmployee> employees = companyEmployeeRepository.findByCompanyId(company.getId());
         if (employees.isEmpty()) {
             log.warn("Maaş Dağıtımı İptali: Şirketin ({}) hiç kayıtlı personeli yok.", company.getCompanyName());
             throw new BankOperationException("Şirketinize kayıtlı personel bulunmamaktadır!");
@@ -234,7 +234,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
         // DÖVİZ KONTROLÜ
         if (!senderAccount.getCurrency().name().equalsIgnoreCase("TRY")) {
-            Double convertedTotal = ICurrencyService.convertAmount(
+            Double convertedTotal = currencyService.convertAmount(
                     totalSalaryInTry.doubleValue(), "TRY", senderAccount.getCurrency().name()
             );
             totalRequiredInSenderCurrency = BigDecimal.valueOf(convertedTotal);
@@ -260,7 +260,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
             BigDecimal amountInSenderCurrency = emp.getSalaryAmount();
 
             if (!senderAccount.getCurrency().name().equalsIgnoreCase("TRY")) {
-                Double converted = ICurrencyService.convertAmount(
+                Double converted = currencyService.convertAmount(
                         emp.getSalaryAmount().doubleValue(), "TRY", senderAccount.getCurrency().name()
                 );
                 amountInSenderCurrency = BigDecimal.valueOf(converted);
@@ -274,7 +274,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
             transferReq.setDescription("Maaş Ödemesi - " + company.getCompanyName());
             transferReq.setSalaryPayment(true);
 
-            TransactionResponse response = ITransactionService.transfer(transferReq);
+            TransactionResponse response = transactionService.transfer(transferReq);
             transactionResults.add(response);
         }
 
@@ -287,7 +287,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
     public AutoPaymentSettingsResponse updateAutoPaymentSettings(String managerIdentityNumber, AutoPaymentSettingsRequest request) {
         log.info("Otomatik maaş ödeme ayarları güncelleniyor. Yönetici: {}", maskIdentity(managerIdentityNumber));
 
-        Company company = ICompanyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
+        Company company = companyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
                 .orElseThrow(() -> new BankOperationException("Kurumsal profil bulunamadı!"));
 
         if (request.isAutoPaymentEnabled()) {
@@ -300,7 +300,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
                 throw new BankOperationException("Otomatik ödeme için geçerli bir kasa IBAN'ı seçmelisiniz!");
             }
 
-            Account account = IAccountRepository.findByIban(request.getDefaultSalaryIban())
+            Account account = accountRepository.findByIban(request.getDefaultSalaryIban())
                     .orElseThrow(() -> new BankOperationException("Seçilen kasa bulunamadı!"));
 
             if (!account.getAppUser().getIdentityNumber().equals(managerIdentityNumber)) {
@@ -318,7 +318,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
         company.setSalaryPaymentDay(request.getPaymentDay());
         company.setDefaultSalaryIban(request.getDefaultSalaryIban());
 
-        ICompanyRepository.save(company);
+        companyRepository.save(company);
 
         log.info("✅ Şirket ({}) otomatik maaş ayarları kaydedildi. Aktif mi: {}, Gün: {}, Kasa: {}",
                 company.getCompanyName(), request.isAutoPaymentEnabled(), request.getPaymentDay(), request.getDefaultSalaryIban());
@@ -334,7 +334,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
     @Override
     public AutoPaymentSettingsResponse getAutoPaymentSettings(String managerIdentityNumber) {
-        Company company = ICompanyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
+        Company company = companyRepository.findByAppUser_IdentityNumber(managerIdentityNumber)
                 .orElseThrow(() -> new BankOperationException("Kurumsal profil bulunamadı!"));
 
         return AutoPaymentSettingsResponse.builder()

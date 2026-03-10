@@ -18,20 +18,20 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TransactionControllerImpl implements ITransactionController {
 
-    private final ITransactionService ITransactionService;
+    private final ITransactionService transactionService;
 
     @Override
     @PostMapping("/deposit")
     public ResponseEntity<TransactionResponse> deposit(@RequestBody DepositRequest request) {
         log.info("REST İsteği: Para yatırma (Deposit) talebi alındı. Hedef IBAN: {}", request.getIban());
-        return ResponseEntity.ok(ITransactionService.deposit(request));
+        return ResponseEntity.ok(transactionService.deposit(request));
     }
 
     @Override
     @PostMapping("/transfer")
     public ResponseEntity<TransactionResponse> transfer(@RequestBody TransferRequest request) {
         log.info("REST İsteği: Para transferi (Transfer) talebi alındı.");
-        return ResponseEntity.ok(ITransactionService.transfer(request));
+        return ResponseEntity.ok(transactionService.transfer(request));
     }
 
     @Override
@@ -42,6 +42,6 @@ public class TransactionControllerImpl implements ITransactionController {
             @RequestParam(required = false) String startDate,
             @RequestParam(required = false) String endDate) {
         log.info("REST İsteği: Hesap hareketleri (Ekstre) sorgulanıyor. Hesap No: {}", accountNumber);
-        return ResponseEntity.ok(ITransactionService.getAccountTransactions(accountNumber, type, startDate, endDate));
+        return ResponseEntity.ok(transactionService.getAccountTransactions(accountNumber, type, startDate, endDate));
     }
 }

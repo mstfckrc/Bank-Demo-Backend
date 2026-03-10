@@ -16,12 +16,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class CurrencyControllerImpl implements ICurrencyController {
 
-    private final ICurrencyService ICurrencyService;
+    private final ICurrencyService currencyService;
 
     @Override
     @GetMapping("/rates")
     public ResponseEntity<ExchangeRateResponse> getRates(String base) {
         log.info("REST İsteği: Canlı kur bilgisi sorgulanıyor. Temel Döviz (Base): {}", base);
-        return ResponseEntity.ok(ICurrencyService.getLiveRates(base));
+        return ResponseEntity.ok(currencyService.getLiveRates(base));
     }
 }

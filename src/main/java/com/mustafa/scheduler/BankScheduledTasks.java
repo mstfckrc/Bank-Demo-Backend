@@ -21,18 +21,18 @@ import java.util.List;
 @RequiredArgsConstructor
 public class BankScheduledTasks {
 
-    private final ICompanyRepository ICompanyRepository;
-    private final ICompanyEmployeeService ICompanyEmployeeService;
-    private final IBillPaymentInstructionRepository IBillPaymentInstructionRepository;
-    private final IBillPaymentService IBillPaymentService;
+    private final ICompanyRepository companyRepository;
+    private final ICompanyEmployeeService companyEmployeeService;
+    private final IBillPaymentInstructionRepository billPaymentInstructionRepository;
+    private final IBillPaymentService billPaymentService;
 
     @Scheduled(cron = "0 * * * * *") // Şimdilik test için dakikada bir çalışsın
     public void processDailyBankOperations() {
         int today = LocalDate.now().getDayOfMonth();
 
         // 1. Veritabanından bugünün işlerini topla
-        List<Company> companiesToPay = ICompanyRepository.findByAutoSalaryPaymentEnabledTrueAndSalaryPaymentDay(today);
-        List<BillPaymentInstruction> billsToPay = IBillPaymentInstructionRepository.findByIsActiveTrueAndPaymentDay(today);
+        List<Company> companiesToPay = companyRepository.findByAutoSalaryPaymentEnabledTrueAndSalaryPaymentDay(today);
+        List<BillPaymentInstruction> billsToPay = billPaymentInstructionRepository.findByIsActiveTrueAndPaymentDay(today);
 
         // Eğer bugün hiçbir iş yoksa konsolu gereksiz loglarla kirletme
         if (companiesToPay.isEmpty() && billsToPay.isEmpty()) {
@@ -50,7 +50,7 @@ public class BankScheduledTasks {
 
             for (Company company : companiesToPay) {
                 try {
-                    ICompanyEmployeeService.paySalariesAutomatically(company.getId(), company.getDefaultSalaryIban());
+                    companyEmployeeService.paySalariesAutomatically(company.getId(), company.getDefaultSalaryIban());
                     log.info("  ✅ BAŞARILI: {} şirketinin personellerine maaşları aktarıldı.", company.getCompanyName());
                 } catch (Exception e) {
                     log.error("  ❌ HATA: {} şirketinin otomatik maaş ödemesi BAŞARISIZ! Sebep: {}", company.getCompanyName(), e.getMessage());
@@ -64,7 +64,7 @@ public class BankScheduledTasks {
 
             for (BillPaymentInstruction instruction : billsToPay) {
                 try {
-                    com.mustafa.dto.response.TransactionResponse response = IBillPaymentService.payBillAutomatically(instruction.getId());
+                    com.mustafa.dto.response.TransactionResponse response = billPaymentService.payBillAutomatically(instruction.getId());
                     if (response != null) {
                         log.info("  ✅ BAŞARILI: Abone {} faturası ödendi. Dekont: {}", instruction.getSubscriberNo(), response.getReferenceNo());
                     }

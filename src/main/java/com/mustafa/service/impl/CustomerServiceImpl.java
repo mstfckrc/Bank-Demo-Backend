@@ -23,9 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CustomerServiceImpl implements ICustomerService {
 
-    private final IAppUserRepository IAppUserRepository;
-    private final IRetailCustomerRepository IRetailCustomerRepository;
-    private final ICompanyRepository ICompanyRepository;
+    private final IAppUserRepository appUserRepository;
+    private final IRetailCustomerRepository retailCustomerRepository;
+    private final ICompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
 
     // 🚀 KVKK Maskeleme Kalkanı
@@ -36,7 +36,7 @@ public class CustomerServiceImpl implements ICustomerService {
 
     private AppUser getAuthenticatedAppUser() {
         String identityNumber = SecurityContextHolder.getContext().getAuthentication().getName();
-        return IAppUserRepository.findByIdentityNumber(identityNumber)
+        return appUserRepository.findByIdentityNumber(identityNumber)
                 .orElseThrow(() -> {
                     log.error("Kimlik doğrulama hatası: Context'te bulunan TC/Vergi No ({}) veritabanında yok!", maskIdentity(identityNumber));
                     return new BankOperationException("Kullanıcı bulunamadı!");
@@ -54,7 +54,7 @@ public class CustomerServiceImpl implements ICustomerService {
         String email = "";
 
         if (appUser.getRole() == AppUser.Role.RETAIL_CUSTOMER) {
-            RetailCustomer retail = IRetailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
+            RetailCustomer retail = retailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
 
             if (request.getEmail() != null && !request.getEmail().isBlank()) {
                 retail.setEmail(request.getEmail());
@@ -72,13 +72,13 @@ public class CustomerServiceImpl implements ICustomerService {
                     retail.setLastName(fullName.substring(lastSpaceIndex + 1).trim());
                 }
             }
-            IRetailCustomerRepository.save(retail);
+            retailCustomerRepository.save(retail);
 
             profileName = (retail.getFirstName() + " " + retail.getLastName()).trim();
             email = retail.getEmail();
 
         } else if (appUser.getRole() == AppUser.Role.CORPORATE_MANAGER) {
-            Company company = ICompanyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
+            Company company = companyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
 
             if (request.getEmail() != null && !request.getEmail().isBlank()) {
                 company.setContactEmail(request.getEmail());
@@ -87,7 +87,7 @@ public class CustomerServiceImpl implements ICustomerService {
             if (request.getProfileName() != null && request.getProfileName().trim().length() >= 3) {
                 company.setCompanyName(request.getProfileName().trim());
             }
-            ICompanyRepository.save(company);
+            companyRepository.save(company);
 
             profileName = company.getCompanyName();
             email = company.getContactEmail();
@@ -121,7 +121,7 @@ public class CustomerServiceImpl implements ICustomerService {
         }
 
         appUser.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        IAppUserRepository.save(appUser);
+        appUserRepository.save(appUser);
         log.info("Şifre başarıyla güncellendi (Dijital kasa kilitleri yenilendi). Kullanıcı: {}", maskedId);
     }
 
@@ -135,11 +135,11 @@ public class CustomerServiceImpl implements ICustomerService {
         String email = "";
 
         if (appUser.getRole() == AppUser.Role.RETAIL_CUSTOMER) {
-            RetailCustomer retail = IRetailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
+            RetailCustomer retail = retailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
             profileName = retail.getFirstName() + " " + retail.getLastName();
             email = retail.getEmail();
         } else if (appUser.getRole() == AppUser.Role.CORPORATE_MANAGER) {
-            Company company = ICompanyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
+            Company company = companyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber()).get();
             profileName = company.getCompanyName();
             email = company.getContactEmail();
         } else {
@@ -169,7 +169,7 @@ public class CustomerServiceImpl implements ICustomerService {
         }
 
         appUser.setStatus(AppUser.ApprovalStatus.PENDING);
-        IAppUserRepository.save(appUser);
+        appUserRepository.save(appUser);
         log.info("Yeniden değerlendirme talebi başarıyla işleme alındı. Durum PENDING yapıldı. Kullanıcı: {}", maskedId);
     }
 }

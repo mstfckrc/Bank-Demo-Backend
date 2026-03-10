@@ -28,10 +28,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AccountServiceImpl implements IAccountService {
 
-    private final IAccountRepository IAccountRepository;
-    private final IAppUserRepository IAppUserRepository;
-    private final IRetailCustomerRepository IRetailCustomerRepository;
-    private final ICompanyRepository ICompanyRepository;
+    private final IAccountRepository accountRepository;
+    private final IAppUserRepository appUserRepository;
+    private final IRetailCustomerRepository retailCustomerRepository;
+    private final ICompanyRepository companyRepository;
 
     // 🚀 KVKK Maskeleme
     private String maskIdentity(String identity) {
@@ -41,16 +41,16 @@ public class AccountServiceImpl implements IAccountService {
 
     private AppUser getAuthenticatedAppUser() {
         String identityNumber = SecurityContextHolder.getContext().getAuthentication().getName();
-        return IAppUserRepository.findByIdentityNumber(identityNumber)
+        return appUserRepository.findByIdentityNumber(identityNumber)
                 .orElseThrow(() -> new RuntimeException("Yetkili kullanıcı bulunamadı!"));
     }
 
     private String getOwnerName(AppUser appUser) {
         if (appUser.getRole() == AppUser.Role.RETAIL_CUSTOMER) {
-            return IRetailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
+            return retailCustomerRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
                     .map(r -> r.getFirstName() + " " + r.getLastName()).orElse("Bilinmeyen Birey");
         } else if (appUser.getRole() == AppUser.Role.CORPORATE_MANAGER) {
-            return ICompanyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
+            return companyRepository.findByAppUser_IdentityNumber(appUser.getIdentityNumber())
                     .map(Company::getCompanyName).orElse("Bilinmeyen Şirket");
         }
         return "Sistem Yöneticisi";
@@ -74,7 +74,7 @@ public class AccountServiceImpl implements IAccountService {
         do {
             accountNumber = AccountUtils.generateAccountNumber();
             iban = AccountUtils.generateIban(accountNumber);
-        } while (IAccountRepository.existsByAccountNumber(accountNumber) || IAccountRepository.existsByIban(iban));
+        } while (accountRepository.existsByAccountNumber(accountNumber) || accountRepository.existsByIban(iban));
 
         Account newAccount = Account.builder()
                 .appUser(currentUser)
@@ -85,7 +85,7 @@ public class AccountServiceImpl implements IAccountService {
                 .isActive(true)
                 .build();
 
-        Account savedAccount = IAccountRepository.save(newAccount);
+        Account savedAccount = accountRepository.save(newAccount);
         log.info("Hesap başarıyla oluşturuldu. Hesap No: {}, IBAN: {}, Sahibi: {}", accountNumber, iban, maskedId);
 
         return mapToResponse(savedAccount);
@@ -96,7 +96,7 @@ public class AccountServiceImpl implements IAccountService {
         AppUser currentUser = getAuthenticatedAppUser();
         log.info("Hesap listesi çekiliyor. Kullanıcı: {}", maskIdentity(currentUser.getIdentityNumber()));
 
-        List<Account> accounts = IAccountRepository.findByAppUserId(currentUser.getId());
+        List<Account> accounts = accountRepository.findByAppUserId(currentUser.getId());
         return accounts.stream().map(this::mapToResponse).collect(Collectors.toList());
     }
 
@@ -105,7 +105,7 @@ public class AccountServiceImpl implements IAccountService {
         AppUser currentUser = getAuthenticatedAppUser();
         String maskedId = maskIdentity(currentUser.getIdentityNumber());
 
-        Account account = IAccountRepository.findByAccountNumber(accountNumber)
+        Account account = accountRepository.findByAccountNumber(accountNumber)
                 .orElseThrow(() -> {
                     log.error("Sorgulanan hesap bulunamadı! Hesap No: {}", accountNumber);
                     return new BankOperationException("Hesap bulunamadı!");
@@ -127,7 +127,7 @@ public class AccountServiceImpl implements IAccountService {
 
         log.info("Hesap kapatma işlemi başlatıldı. Hesap No: {}, Kullanıcı: {}", accountNumber, maskedId);
 
-        Account account = IAccountRepository.findByAccountNumber(accountNumber)
+        Account account = accountRepository.findByAccountNumber(accountNumber)
                 .orElseThrow(() -> new BankOperationException("Hesap bulunamadı!"));
 
         if (!account.isActive()) {
@@ -157,7 +157,7 @@ public class AccountServiceImpl implements IAccountService {
         }
 
         account.setActive(false);
-        IAccountRepository.save(account);
+        accountRepository.save(account);
         log.info("Hesap başarıyla pasife alındı (Kapatıldı). Hesap No: {}", accountNumber);
     }
 

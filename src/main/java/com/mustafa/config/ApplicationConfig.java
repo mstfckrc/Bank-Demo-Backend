@@ -16,12 +16,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 @RequiredArgsConstructor
 public class ApplicationConfig {
 
-    private final IAppUserRepository IAppUserRepository;
+    private final IAppUserRepository appUserRepository;
 
     // Spring Security'ye kullanıcıyı (Müşteriyi) TC No ile bulmasını söylüyoruz
     @Bean
     public UserDetailsService userDetailsService() {
-        return username -> IAppUserRepository.findByIdentityNumber(username)
+        return username -> appUserRepository.findByIdentityNumber(username)
                 .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("Kullanıcı bulunamadı: " + username));
     }
 

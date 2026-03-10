@@ -27,7 +27,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class CompanyEmployeeControllerImpl implements ICompanyEmployeeController {
 
-    private final ICompanyEmployeeService ICompanyEmployeeService;
+    private final ICompanyEmployeeService companyEmployeeService;
 
     @Override
     @PostMapping
@@ -37,7 +37,7 @@ public class CompanyEmployeeControllerImpl implements ICompanyEmployeeController
 
         log.info("REST İsteği: Yeni personel işe alım talebi alındı.");
         String managerIdentityNumber = principal.getName();
-        return new ResponseEntity<>(ICompanyEmployeeService.hireEmployee(managerIdentityNumber, request), HttpStatus.CREATED);
+        return new ResponseEntity<>(companyEmployeeService.hireEmployee(managerIdentityNumber, request), HttpStatus.CREATED);
     }
 
     @Override
@@ -45,7 +45,7 @@ public class CompanyEmployeeControllerImpl implements ICompanyEmployeeController
     public ResponseEntity<List<CompanyEmployeeResponse>> getMyEmployees(Principal principal) {
         log.info("REST İsteği: Kurumsal müşterinin personel listesi sorgulanıyor.");
         String managerIdentityNumber = principal.getName();
-        return ResponseEntity.ok(ICompanyEmployeeService.getMyEmployees(managerIdentityNumber));
+        return ResponseEntity.ok(companyEmployeeService.getMyEmployees(managerIdentityNumber));
     }
 
     @Override
@@ -57,7 +57,7 @@ public class CompanyEmployeeControllerImpl implements ICompanyEmployeeController
 
         log.info("REST İsteği: Personel maaş/IBAN bilgileri güncelleniyor.");
         String managerIdentityNumber = principal.getName();
-        return ResponseEntity.ok(ICompanyEmployeeService.updateEmployee(managerIdentityNumber, employeeIdentityNumber, request));
+        return ResponseEntity.ok(companyEmployeeService.updateEmployee(managerIdentityNumber, employeeIdentityNumber, request));
     }
 
     @Override
@@ -68,7 +68,7 @@ public class CompanyEmployeeControllerImpl implements ICompanyEmployeeController
 
         log.info("REST İsteği: Personeli işten çıkarma talebi alındı.");
         String managerIdentityNumber = principal.getName();
-        ICompanyEmployeeService.removeEmployee(managerIdentityNumber, employeeIdentityNumber);
+        companyEmployeeService.removeEmployee(managerIdentityNumber, employeeIdentityNumber);
 
         Map<String, String> response = new HashMap<>();
         response.put("message", employeeIdentityNumber + " kimlik numaralı personel başarıyla şirketten çıkarıldı.");
@@ -83,7 +83,7 @@ public class CompanyEmployeeControllerImpl implements ICompanyEmployeeController
 
         log.info("REST İsteği: Toplu maaş dağıtım operasyonu tetiklendi.");
         String managerIdentityNumber = principal.getName();
-        return ResponseEntity.ok(ICompanyEmployeeService.paySalaries(managerIdentityNumber, request));
+        return ResponseEntity.ok(companyEmployeeService.paySalaries(managerIdentityNumber, request));
     }
 
     // 🚀 YENİ EKLENEN KAPI (ENDPOINT)
@@ -95,7 +95,7 @@ public class CompanyEmployeeControllerImpl implements ICompanyEmployeeController
 
         log.info("REST İsteği: Şirket otomatik maaş ödeme ayarlarını güncelleme talebi alındı.");
         String managerIdentityNumber = principal.getName();
-        return ResponseEntity.ok(ICompanyEmployeeService.updateAutoPaymentSettings(managerIdentityNumber, request));
+        return ResponseEntity.ok(companyEmployeeService.updateAutoPaymentSettings(managerIdentityNumber, request));
     }
 
     // 🚀 YENİ EKLENEN KAPI: Ayarları okumak için
@@ -104,6 +104,6 @@ public class CompanyEmployeeControllerImpl implements ICompanyEmployeeController
     public ResponseEntity<AutoPaymentSettingsResponse> getAutoPaymentSettings(Principal principal) {
         log.info("REST İsteği: Şirket otomatik maaş ödeme ayarları getiriliyor.");
         String managerIdentityNumber = principal.getName();
-        return ResponseEntity.ok(ICompanyEmployeeService.getAutoPaymentSettings(managerIdentityNumber));
+        return ResponseEntity.ok(companyEmployeeService.getAutoPaymentSettings(managerIdentityNumber));
     }
 }

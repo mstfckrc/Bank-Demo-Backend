@@ -22,7 +22,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class BillPaymentControllerImpl implements IBillPaymentController {
 
-    private final IBillPaymentService IBillPaymentService;
+    private final IBillPaymentService billPaymentService;
 
     @Override
     @PostMapping
@@ -31,7 +31,7 @@ public class BillPaymentControllerImpl implements IBillPaymentController {
             @Valid @RequestBody BillInstructionRequest request) {
 
         log.info("REST İsteği: Yeni fatura otomatik ödeme talimatı oluşturma");
-        return new ResponseEntity<>(IBillPaymentService.createInstruction(principal.getName(), request), HttpStatus.CREATED);
+        return new ResponseEntity<>(billPaymentService.createInstruction(principal.getName(), request), HttpStatus.CREATED);
     }
 
     @Override
@@ -39,7 +39,7 @@ public class BillPaymentControllerImpl implements IBillPaymentController {
     public ResponseEntity<List<BillInstructionResponse>> getMyInstructions(Principal principal) {
 
         log.info("REST İsteği: Kullanıcının fatura talimatları listeleniyor");
-        return ResponseEntity.ok(IBillPaymentService.getMyInstructions(principal.getName()));
+        return ResponseEntity.ok(billPaymentService.getMyInstructions(principal.getName()));
     }
 
     @Override
@@ -49,7 +49,7 @@ public class BillPaymentControllerImpl implements IBillPaymentController {
             @PathVariable Long id) {
 
         log.info("REST İsteği: Fatura talimatı silme (Talimat ID: {})", id);
-        IBillPaymentService.deleteInstruction(principal.getName(), id);
+        billPaymentService.deleteInstruction(principal.getName(), id);
 
         Map<String, String> response = new HashMap<>();
         response.put("message", "Fatura otomatik ödeme talimatı başarıyla iptal edildi.");
