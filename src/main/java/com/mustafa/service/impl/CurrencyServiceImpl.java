@@ -35,17 +35,20 @@ public class CurrencyServiceImpl implements ICurrencyService {
 
     @Override
     public Double convertAmount(Double amount, String fromCurrency, String toCurrency) {
-        log.info("Döviz çevirim motoru çalıştı: {} {} -> {}", amount, fromCurrency.toUpperCase(), toCurrency.toUpperCase());
 
+        // 1. ÖNCE AKILLI KONTROLÜ YAP (Aynıysa hiç motoru yorma)
         if (fromCurrency.equalsIgnoreCase(toCurrency)) {
             log.info("Çevirim İptali: Kaynak ve hedef para birimleri aynı ({}). İşlem yapılmadı.", fromCurrency.toUpperCase());
-            return amount; // Aynı birimse çevirme yapma
+            return amount;
         }
 
-        // 1. "From" para birimine göre tüm kurları çek (Örn: TRY)
+        // 2. EĞER FARKLIYSA MOTORU ÇALIŞTIRDIĞINI BİLDİR (🚀 Logu buraya taşıdık)
+        log.info("Döviz çevirim motoru çalıştı: {} {} -> {}", amount, fromCurrency.toUpperCase(), toCurrency.toUpperCase());
+
+        // 3. "From" para birimine göre tüm kurları çek
         ExchangeRateResponse response = getLiveRates(fromCurrency);
 
-        // 2. Hedef para biriminin (Örn: USD) karşılığını al
+        // 4. Hedef para biriminin karşılığını al
         Double rate = response.getRates().get(toCurrency.toUpperCase());
 
         if (rate == null) {
@@ -53,7 +56,7 @@ public class CurrencyServiceImpl implements ICurrencyService {
             throw new BankOperationException("Desteklenmeyen para birimi: " + toCurrency);
         }
 
-        // 3. Miktarı kurla çarp ve dön
+        // 5. Miktarı kurla çarp ve dön
         Double result = amount * rate;
 
         log.info("✅ Çevirim Başarılı: {} {} = {} {} (Uygulanan Kur Çarpanı: {})",
