@@ -27,7 +27,7 @@ public class BankScheduledTasks {
     private final IBillPaymentInstructionRepository billPaymentInstructionRepository;
     private final IBillPaymentService billPaymentService;
 
-    @Scheduled(cron = "0 * * * * *") // Şimdilik test için dakikada bir çalışsın
+    @Scheduled(cron = "0 0 0 * * *") // Şimdilik test için dakikada bir çalışsın
     public void processDailyBankOperations() {
         int today = LocalDate.now().getDayOfMonth();
 
