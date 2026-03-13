@@ -1,5 +1,6 @@
 package com.mustafa.service.impl;
 
+import com.mustafa.config.RabbitMQPublisher;
 import com.mustafa.dto.request.DepositRequest;
 import com.mustafa.dto.request.TransferRequest;
 import com.mustafa.dto.response.TransactionResponse;
@@ -33,6 +34,8 @@ public class TransactionServiceImpl implements ITransactionService {
     private final IAccountRepository accountRepository;
     private final ITransactionRepository transactionRepository;
     private final ICurrencyService currencyService;
+
+    private final RabbitMQPublisher rabbitPublisher;
 
     private static final BigDecimal TRANSACTION_LIMIT = new BigDecimal("50000");
 
@@ -85,7 +88,7 @@ public class TransactionServiceImpl implements ITransactionService {
 
         transactionRepository.save(transaction);
         log.info("✅ Para yatırma işlemi başarıyla tamamlandı. Referans: {}", transaction.getReferenceNo());
-
+        rabbitPublisher.sendNotification("HESABA PARA YATIRILDI | Hesap: " + request.getIban() + " | Tutar: " + request.getAmount() + " | Ref: " + transaction.getReferenceNo());
         return mapToResponse(transaction);
     }
 
@@ -212,6 +215,14 @@ public class TransactionServiceImpl implements ITransactionService {
         transactionRepository.save(transaction);
         log.info("✅ İşlem kaydı başarıyla oluşturuldu. Durum: {}, Referans: {}", status, transaction.getReferenceNo());
 
+        if (status == Transaction.TransactionStatus.PENDING_APPROVAL) {
+            // Adminlere acil MASAK bildirimi gidiyor!
+            rabbitPublisher.sendNotification("🚨 MASAK ONAYI BEKLİYOR | Yüklü Transfer Denemesi! Gönderen: " + request.getSenderIban() + " | Tutar: " + request.getAmount() + " | Ref: " + transaction.getReferenceNo());
+        } else {
+            // Normal transfer, müşteriye ve alıcıya bildirim gidiyor
+            rabbitPublisher.sendNotification("TRANSFER BAŞARILI | Gönderen: " + request.getSenderIban() + " | Alıcı: " + request.getReceiverIban() + " | Tutar: " + request.getAmount());
+        }
+
         return mapToResponse(transaction);
     }
 
@@ -294,6 +305,7 @@ public class TransactionServiceImpl implements ITransactionService {
         transactionRepository.save(transaction);
 
         log.info("✅ Admin İşlemi Başarılı: İşlem ({}) ONAYLANDI ve para alıcı hesaba geçirildi.", referenceNo);
+        rabbitPublisher.sendNotification("TRANSFER ONAYLANDI | Bekleyen işleminiz yönetici tarafından onaylanmış ve alıcıya ulaşmıştır. Ref: " + referenceNo);
         return mapToResponse(transaction);
     }
 
@@ -324,6 +336,7 @@ public class TransactionServiceImpl implements ITransactionService {
         transactionRepository.save(transaction);
 
         log.info("🚫 Admin İşlemi Başarılı: İşlem ({}) REDDEDİLDİ ve dondurulan tutar göndericiye iade edildi.", referenceNo);
+        rabbitPublisher.sendNotification("TRANSFER REDDEDİLDİ 🚫 | Bekleyen işleminiz MASAK/Güvenlik kuralları gereği reddedilmiş olup, tutar hesabınıza iade edilmiştir. Ref: " + referenceNo);
         return mapToResponse(transaction);
     }
 

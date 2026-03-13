@@ -1,5 +1,6 @@
 package com.mustafa.service.impl;
 
+import com.mustafa.config.RabbitMQPublisher;
 import com.mustafa.dto.request.BillInstructionRequest;
 import com.mustafa.dto.response.BillInstructionResponse;
 import com.mustafa.dto.response.TransactionResponse;
@@ -33,6 +34,8 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
     private final ITransactionRepository transactionRepository;
     private final ICurrencyService currencyService;
     private final IExternalBillService externalBillService; // 🚀 HATA VEREN YER DÜZELDİ
+
+    private final RabbitMQPublisher rabbitPublisher;
 
     // KVKK Maskeleme Kalkanı
     private String maskIdentity(String identity) {
@@ -103,6 +106,8 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
         log.info("🎉 FATURA ÖDENDİ: {} kasasından {} {} çekildi. (Abone: {})",
                 account.getAccountNumber(), String.format("%.2f", debtInAccountCurrency), account.getCurrency().name(), instruction.getSubscriberNo());
 
+        rabbitPublisher.sendNotification("FATURA ÖDENDİ | Tür: " + instruction.getBillType().name() + " | Abone: " + instruction.getSubscriberNo() + " | Tutar: " + debtInAccountCurrency + " " + account.getCurrency().name());
+
         // 🚀 DÜZELTME: Artık düzgün bir response dönüyoruz!
         return TransactionResponse.builder()
                 .referenceNo(transaction.getReferenceNo())
@@ -136,6 +141,8 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
 
         instructionRepository.save(instruction);
         log.info("Kullanıcı ({}) yeni fatura talimatı oluşturdu. Abone: {}", maskIdentity(identityNumber), request.getSubscriberNo());
+        rabbitPublisher.sendNotification("YENİ OTOMATİK ÖDEME TALİMATI | Tür: " + instruction.getBillType().name() + " | Abone: " + instruction.getSubscriberNo());
+
         return mapToResponse(instruction);
     }
 
@@ -159,6 +166,7 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
 
         instructionRepository.delete(instruction);
         log.info("Kullanıcı ({}) fatura talimatını (ID: {}) sildi.", maskIdentity(identityNumber), instructionId);
+        rabbitPublisher.sendNotification("TALİMAT İPTAL EDİLDİ | Talimat ID: " + instructionId + " | Kimlik: " + maskIdentity(identityNumber));
     }
 
     private BillInstructionResponse mapToResponse(BillPaymentInstruction instruction) {

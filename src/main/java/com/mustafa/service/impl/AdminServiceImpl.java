@@ -1,5 +1,6 @@
 package com.mustafa.service.impl;
 
+import com.mustafa.config.RabbitMQPublisher;
 import com.mustafa.dto.request.OpenAccountRequest;
 import com.mustafa.dto.request.UpdateProfileRequest;
 import com.mustafa.dto.response.AccountResponse;
@@ -35,6 +36,8 @@ public class AdminServiceImpl implements IAdminService {
     private final ICompanyRepository companyRepository;
     private final IAccountRepository accountRepository;
     private final ITransactionRepository transactionRepository;
+
+    private final RabbitMQPublisher rabbitPublisher;
 
     // 🚀 KVKK Maskeleme Kalkanı
     private String maskIdentity(String identity) {
@@ -137,6 +140,8 @@ public class AdminServiceImpl implements IAdminService {
 
         appUserRepository.delete(appUser);
         log.info("Admin İşlemi Başarılı: Müşteri ({}) ve bağlı tüm hesapları sistemden tamamen (Cascade) silindi.", maskedId);
+
+        rabbitPublisher.sendNotification("ADMİN İŞLEMİ: Müşteri kaydı sistemden silindi | Kimlik: " + maskedId);
     }
 
     @Override
@@ -185,6 +190,8 @@ public class AdminServiceImpl implements IAdminService {
         }
 
         log.info("Admin İşlemi Başarılı: Müşteri ({}) profil bilgileri güncellendi.", maskedId);
+
+        rabbitPublisher.sendNotification("ADMİN İŞLEMİ: Profil bilgileri güncellendi | Kimlik: " + maskedId);
 
         return UserProfileResponse.builder()
                 .identityNumber(appUser.getIdentityNumber())
@@ -256,6 +263,8 @@ public class AdminServiceImpl implements IAdminService {
         Account savedAccount = accountRepository.save(newAccount);
         log.info("Admin İşlemi Başarılı: Müşteriye ({}) yeni hesap (No: {}, Döviz: {}) açıldı.", maskedId, generatedAccountNumber, accountCurrency);
 
+        rabbitPublisher.sendNotification("ADMİN İŞLEMİ: Yeni banka hesabı açıldı | Hesap No: " + generatedAccountNumber + " | Kimlik: " + maskedId);
+
         return AccountResponse.builder()
                 .id(savedAccount.getId())
                 .accountNumber(savedAccount.getAccountNumber())
@@ -283,5 +292,7 @@ public class AdminServiceImpl implements IAdminService {
         appUserRepository.save(appUser);
 
         log.info("Admin İşlemi Başarılı: Müşterinin ({}) sistem durumu [{}] olarak güncellendi.", maskedId, status.toUpperCase());
+
+        rabbitPublisher.sendNotification("ADMİN İŞLEMİ: Hesap durumu güncellendi [" + status.toUpperCase() + "] | Kimlik: " + maskedId);
     }
 }

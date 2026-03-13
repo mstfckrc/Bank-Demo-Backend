@@ -1,5 +1,6 @@
 package com.mustafa.service.impl;
 
+import com.mustafa.config.RabbitMQPublisher;
 import com.mustafa.dto.request.ChangePasswordRequest;
 import com.mustafa.dto.request.UpdateProfileRequest;
 import com.mustafa.dto.response.UserProfileResponse;
@@ -27,6 +28,7 @@ public class CustomerServiceImpl implements ICustomerService {
     private final IRetailCustomerRepository retailCustomerRepository;
     private final ICompanyRepository companyRepository;
     private final PasswordEncoder passwordEncoder;
+    private final RabbitMQPublisher rabbitPublisher;
 
     // 🚀 KVKK Maskeleme Kalkanı
     private String maskIdentity(String identity) {
@@ -95,6 +97,8 @@ public class CustomerServiceImpl implements ICustomerService {
 
         log.info("Profil başarıyla güncellendi. Kullanıcı: {}", maskedId);
 
+        rabbitPublisher.sendNotification("PROFİL GÜNCELLENDİ | Kimlik: " + maskedId + " | Yeni İletişim: " + email);
+
         return UserProfileResponse.builder()
                 .identityNumber(appUser.getIdentityNumber())
                 .profileName(profileName)
@@ -123,6 +127,7 @@ public class CustomerServiceImpl implements ICustomerService {
         appUser.setPassword(passwordEncoder.encode(request.getNewPassword()));
         appUserRepository.save(appUser);
         log.info("Şifre başarıyla güncellendi (Dijital kasa kilitleri yenilendi). Kullanıcı: {}", maskedId);
+        rabbitPublisher.sendNotification("GÜVENLİK UYARISI: Şifre Değiştirildi! | Kimlik: " + maskedId);
     }
 
     @Override
@@ -171,5 +176,6 @@ public class CustomerServiceImpl implements ICustomerService {
         appUser.setStatus(AppUser.ApprovalStatus.PENDING);
         appUserRepository.save(appUser);
         log.info("Yeniden değerlendirme talebi başarıyla işleme alındı. Durum PENDING yapıldı. Kullanıcı: {}", maskedId);
+        rabbitPublisher.sendNotification("HESAP ONAY İTİRAZI (APPEAL) | Kimlik: " + maskedId + " hesabının yeniden incelenmesini talep ediyor.");
     }
 }

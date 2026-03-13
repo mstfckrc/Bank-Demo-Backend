@@ -1,5 +1,6 @@
 package com.mustafa.service.impl;
 
+import com.mustafa.config.RabbitMQPublisher;
 import com.mustafa.dto.request.LoginRequest;
 import com.mustafa.dto.request.RegisterRequest;
 import com.mustafa.dto.response.AuthResponse;
@@ -31,6 +32,8 @@ public class AuthServiceImpl implements IAuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+
+    private final RabbitMQPublisher rabbitPublisher;
 
     // 🚀 KVKK Uyumlu Loglama İçin Maskeleme Metodu (Örn: 12345678901 -> *******8901)
     private String maskIdentity(String identity) {
@@ -97,6 +100,8 @@ public class AuthServiceImpl implements IAuthService {
         String jwtToken = jwtService.generateToken(appUser);
         log.info("Kayıt tamamlandı. {} için JWT Token üretildi.", maskedId);
 
+        rabbitPublisher.sendNotification("SİSTEME YENİ KAYIT | Kimlik: " + maskedId + " | Rol: " + request.getRole());
+
         return AuthResponse.builder().token(jwtToken).message("Kayıt işlemi başarıyla gerçekleşti.").build();
     }
 
@@ -113,6 +118,10 @@ public class AuthServiceImpl implements IAuthService {
         } catch (org.springframework.security.core.AuthenticationException e) {
             // 🚀 İŞTE YENİ İSTİHBARAT AĞIMIZ: Yanlış şifre denendiğinde burası ötecek!
             log.warn("🚨 Başarısız giriş denemesi! Hatalı şifre. Kimlik: {}", maskedId);
+
+            // Bu mesajı dinleyen servis anında müşteriye "Hesabınıza girmeye çalıştılar" diye mail atabilir.
+            rabbitPublisher.sendNotification("GÜVENLİK ALARMI! | Başarısız giriş denemesi | Kimlik: " + maskedId);
+
             throw new BankOperationException("Kimlik numarası veya şifre hatalı!");
         }
 
@@ -124,6 +133,8 @@ public class AuthServiceImpl implements IAuthService {
 
         String jwtToken = jwtService.generateToken(appUser);
         log.info("Giriş başarılı. {} kimlikli kullanıcı sisteme giriş yaptı.", maskedId);
+
+        rabbitPublisher.sendNotification("SİSTEME GİRİŞ YAPILDI | Kimlik: " + maskedId);
 
         return AuthResponse.builder().token(jwtToken).message("Giriş başarılı.").build();
     }

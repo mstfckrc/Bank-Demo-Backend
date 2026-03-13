@@ -1,5 +1,6 @@
 package com.mustafa.service.impl;
 
+import com.mustafa.config.RabbitMQPublisher;
 import com.mustafa.dto.request.*;
 import com.mustafa.dto.response.AutoPaymentSettingsResponse;
 import com.mustafa.dto.response.CompanyEmployeeResponse;
@@ -36,6 +37,8 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
     private final IAccountRepository accountRepository;
     private final ITransactionService transactionService;
     private final ICurrencyService currencyService;
+
+    private final RabbitMQPublisher rabbitPublisher;
 
     // 🚀 KVKK Maskeleme Kalkanı
     private String maskIdentity(String identity) {
@@ -89,7 +92,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
         CompanyEmployee savedEmployee = companyEmployeeRepository.save(newEmployee);
         log.info("İşe alım başarılı! Personel ({}), {} şirketine eklendi.", maskedEmployeeId, company.getCompanyName());
-
+        rabbitPublisher.sendNotification("YENİ PERSONEL İŞE ALINDI | Şirket: " + company.getCompanyName() + " | Personel: " + maskedEmployeeId);
         return mapToResponse(savedEmployee);
     }
 
@@ -159,6 +162,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
         companyEmployeeRepository.delete(employeeRecord);
         log.info("Personel ({}) başarıyla şirketten çıkarıldı.", maskedEmployeeId);
+        rabbitPublisher.sendNotification("PERSONEL İŞTEN ÇIKIŞI | Şirket: " + company.getCompanyName() + " | Personel: " + maskedEmployeeId);
     }
 
     // 1️⃣ KULLANICI KAPISI (Manuel Tetikleme)
@@ -279,6 +283,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
         }
 
         log.info("✅ Toplu maaş dağıtımı KUSURSUZ tamamlandı. Toplam Aktarılan: {} TRY", totalSalaryInTry);
+        rabbitPublisher.sendNotification("TOPLU MAAŞ DAĞITIMI TAMAMLANDI | Şirket: " + company.getCompanyName() + " | Toplam Aktarılan: " + totalSalaryInTry + " TRY");
         return transactionResults;
     }
 
@@ -322,7 +327,7 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
         log.info("✅ Şirket ({}) otomatik maaş ayarları kaydedildi. Aktif mi: {}, Gün: {}, Kasa: {}",
                 company.getCompanyName(), request.isAutoPaymentEnabled(), request.getPaymentDay(), request.getDefaultSalaryIban());
-
+        rabbitPublisher.sendNotification("OTOMATİK MAAŞ AYARLARI GÜNCELLENDİ | Şirket: " + company.getCompanyName() + " | Aktif: " + request.isAutoPaymentEnabled());
         // 🚀 DÜZELTME: Artık jilet gibi bir Response objesi dönüyoruz!
         return AutoPaymentSettingsResponse.builder()
                 .autoPaymentEnabled(company.isAutoSalaryPaymentEnabled())

@@ -1,5 +1,6 @@
 package com.mustafa.service.impl;
 
+import com.mustafa.config.RabbitMQPublisher;
 import com.mustafa.dto.request.CreateAccountRequest;
 import com.mustafa.dto.response.AccountResponse;
 import com.mustafa.entity.Account;
@@ -32,6 +33,8 @@ public class AccountServiceImpl implements IAccountService {
     private final IAppUserRepository appUserRepository;
     private final IRetailCustomerRepository retailCustomerRepository;
     private final ICompanyRepository companyRepository;
+
+    private final RabbitMQPublisher rabbitPublisher;
 
     // 🚀 KVKK Maskeleme
     private String maskIdentity(String identity) {
@@ -87,6 +90,10 @@ public class AccountServiceImpl implements IAccountService {
 
         Account savedAccount = accountRepository.save(newAccount);
         log.info("Hesap başarıyla oluşturuldu. Hesap No: {}, IBAN: {}, Sahibi: {}", accountNumber, iban, maskedId);
+
+        // Müşteriye "Hesabınız açıldı" maili/SMS'i atılması için arka plana iş bırakıyoruz.
+        String message = "YENİ HESAP BİLDİRİMİ | Hesap No: " + accountNumber + " | Kullanıcı: " + maskedId;
+        rabbitPublisher.sendNotification(message);
 
         return mapToResponse(savedAccount);
     }
@@ -159,6 +166,10 @@ public class AccountServiceImpl implements IAccountService {
         account.setActive(false);
         accountRepository.save(account);
         log.info("Hesap başarıyla pasife alındı (Kapatıldı). Hesap No: {}", accountNumber);
+
+        // Müşteriye "Hesabınız güvenlik/istek sebebiyle kapatıldı" bilgisini arka planda yollatıyoruz.
+        String closeMessage = "HESAP KAPATMA BİLDİRİMİ | Hesap No: " + accountNumber + " | Kullanıcı: " + maskedId;
+        rabbitPublisher.sendNotification(closeMessage);
     }
 
     private AccountResponse mapToResponse(Account account) {

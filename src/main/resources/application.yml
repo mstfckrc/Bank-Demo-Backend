@@ -3,10 +3,13 @@ server:
 
 spring:
   datasource:
+    # Not: Eğer veritabanı da tamemen Docker içindeyse localhost yerine postgres yazman gerekebilir.
+    # Şimdilik senin mevcut yapını (DB_URL) korudum.
     url: ${DB_URL:jdbc:postgresql://localhost:5432/bank_db}
     username: postgres
-    password: 1 # Buraya kendi pgAdmin ?ifreni yazmal?s?n
+    password: 1 # Buraya kendi pgAdmin şifreni yazmalısın
     driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
       ddl-auto: update
@@ -15,7 +18,14 @@ spring:
       hibernate:
         format_sql: true
 
+  # 🚀 RABBITMQ POSTANE AYARLARI (DOCKER UYUMLU)
+  rabbitmq:
+    host: rabbitmq # Docker içindeki konteynerin birebir adı! (localhost DEĞİL)
+    port: 5672
+    username: admin
+    password: 123456
+
 jwt:
-  # JJWT 0.13.0 standartlar?na uygun, 512-bit uzunlu?unda g��l� bir anahtar:
+  # JJWT 0.13.0 standartlarına uygun, 512-bit uzunluğunda güçlü bir anahtar:
   secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
-  expiration: 86400000 # 1 g�n (milisaniye cinsinden)
+  expiration: 86400000 # 1 gün (milisaniye cinsinden)
