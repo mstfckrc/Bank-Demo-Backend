@@ -161,12 +161,21 @@ public class TransactionServiceImpl implements ITransactionService {
         }
 
         // 3. MASAK KONTROLÜ VE İŞLEM TİPİ BELİRLEME
+        // 3. MASAK KONTROLÜ VE İŞLEM TİPİ BELİRLEME
         Transaction.TransactionStatus status;
-        Double amountInTryDouble = currencyService.convertAmount(
-                request.getAmount().doubleValue(),
-                senderAccount.getCurrency().toString(),
-                "TRY"
-        );
+
+        // 🚀 DÜZELTME: Eğer para zaten TRY ise döviz motorunu hiç yorma, değilse çevir!
+        Double amountInTryDouble;
+        if (senderAccount.getCurrency().toString().equals("TRY")) {
+            amountInTryDouble = request.getAmount().doubleValue();
+        } else {
+            amountInTryDouble = currencyService.convertAmount(
+                    request.getAmount().doubleValue(),
+                    senderAccount.getCurrency().toString(),
+                    "TRY"
+            );
+        }
+
         BigDecimal amountInTry = BigDecimal.valueOf(amountInTryDouble);
 
         Transaction.TransactionType type = Transaction.TransactionType.TRANSFER;
