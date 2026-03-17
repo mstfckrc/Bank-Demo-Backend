@@ -1,6 +1,7 @@
 package com.mustafa.service.impl;
 
-import com.mustafa.config.RabbitMQPublisher;
+import com.mustafa.dto.message.NotificationMessage;
+import com.mustafa.messaging.publisher.RabbitMQPublisher;
 import com.mustafa.dto.request.OpenAccountRequest;
 import com.mustafa.dto.request.UpdateProfileRequest;
 import com.mustafa.dto.response.AccountResponse;
@@ -141,7 +142,16 @@ public class AdminServiceImpl implements IAdminService {
         appUserRepository.delete(appUser);
         log.info("Admin İşlemi Başarılı: Müşteri ({}) ve bağlı tüm hesapları sistemden tamamen (Cascade) silindi.", maskedId);
 
-        rabbitPublisher.sendNotification("ADMİN İŞLEMİ: Müşteri kaydı sistemden silindi | Kimlik: " + maskedId);
+        // YENİ HALİ: Müşteri Silinme DTO'su
+        NotificationMessage deleteMessage = NotificationMessage.builder()
+                .destination("admin@bank.com") // Sistem yöneticisi e-postası veya log kanalı
+                .subject("ADMİN İŞLEMİ: Müşteri Kaydı Silindi")
+                .content(String.format("Sistem yöneticisi tarafından %s kimlik numaralı müşterinin kaydı ve bağlı tüm hesapları (Cascade) tamamen silinmiştir.", maskedId))
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.SYSTEM_ALERT)
+                .build();
+
+        rabbitPublisher.sendNotification(deleteMessage);
     }
 
     @Override
@@ -191,8 +201,16 @@ public class AdminServiceImpl implements IAdminService {
 
         log.info("Admin İşlemi Başarılı: Müşteri ({}) profil bilgileri güncellendi.", maskedId);
 
-        rabbitPublisher.sendNotification("ADMİN İŞLEMİ: Profil bilgileri güncellendi | Kimlik: " + maskedId);
+// YENİ HALİ: Profil Güncelleme DTO'su
+        NotificationMessage updateMessage = NotificationMessage.builder()
+                .destination(getOwnerEmail(appUser)) // Müşterinin güncel e-postası
+                .subject("Profil Bilgileriniz Güncellendi (Sistem Yöneticisi)")
+                .content("Müşteri profil bilgileriniz sistem yöneticisi tarafından güncellenmiştir. Herhangi bir sorunuz varsa lütfen müşteri hizmetleri ile iletişime geçiniz.")
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
 
+        rabbitPublisher.sendNotification(updateMessage);
         return UserProfileResponse.builder()
                 .identityNumber(appUser.getIdentityNumber())
                 .profileName(getOwnerName(appUser))
@@ -263,8 +281,17 @@ public class AdminServiceImpl implements IAdminService {
         Account savedAccount = accountRepository.save(newAccount);
         log.info("Admin İşlemi Başarılı: Müşteriye ({}) yeni hesap (No: {}, Döviz: {}) açıldı.", maskedId, generatedAccountNumber, accountCurrency);
 
-        rabbitPublisher.sendNotification("ADMİN İŞLEMİ: Yeni banka hesabı açıldı | Hesap No: " + generatedAccountNumber + " | Kimlik: " + maskedId);
+// YENİ HALİ: Yeni Kasa Açılış DTO'su
+        NotificationMessage accountMessage = NotificationMessage.builder()
+                .destination(getOwnerEmail(appUser))
+                .subject("Yeni Banka Hesabınız Açıldı")
+                .content(String.format("Sayın %s, sistem yöneticisi tarafından adınıza %s döviz cinsinden %s numaralı yeni bir banka hesabı (kasa) başarıyla açılmıştır.",
+                        getOwnerName(appUser), accountCurrency.name(), generatedAccountNumber))
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
 
+        rabbitPublisher.sendNotification(accountMessage);
         return AccountResponse.builder()
                 .id(savedAccount.getId())
                 .accountNumber(savedAccount.getAccountNumber())
@@ -293,6 +320,15 @@ public class AdminServiceImpl implements IAdminService {
 
         log.info("Admin İşlemi Başarılı: Müşterinin ({}) sistem durumu [{}] olarak güncellendi.", maskedId, status.toUpperCase());
 
-        rabbitPublisher.sendNotification("ADMİN İŞLEMİ: Hesap durumu güncellendi [" + status.toUpperCase() + "] | Kimlik: " + maskedId);
-    }
+// YENİ HALİ: Onay/Ret Durumu DTO'su
+        NotificationMessage statusMessage = NotificationMessage.builder()
+                .destination(getOwnerEmail(appUser))
+                .subject("Hesap Durumunuz Güncellendi")
+                .content(String.format("Sayın %s, bankacılık sistemi hesap onay durumunuz sistem yöneticisi tarafından [%s] olarak güncellenmiştir.",
+                        getOwnerName(appUser), status.toUpperCase()))
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
+
+        rabbitPublisher.sendNotification(statusMessage);    }
 }

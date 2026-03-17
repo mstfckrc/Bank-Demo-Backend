@@ -1,5 +1,7 @@
-package com.mustafa.config; // Kendi paket adına göre düzenle
+package com.mustafa.messaging.publisher;
 
+import com.mustafa.config.RabbitMQConfig;
+import com.mustafa.dto.message.NotificationMessage; // 🚀 Eklendi
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -10,21 +12,20 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class RabbitMQPublisher {
 
-    // Spring'in bize sunduğu o meşhur RabbitMQ telsizi
     private final RabbitTemplate rabbitTemplate;
 
     /**
-     * Servislerin (Örn: TransactionService) gelip çağıracağı TEK metot.
-     * @param message Gönderilecek olan paket (DTO, String, ID fark etmez)
+     * 🚀 ARTIK SADECE RESMİ ZARF (DTO) KABUL EDİYORUZ!
      */
-    public void sendNotification(Object message) {
-        log.info("📢 Telsiz: Mesaj RabbitMQ postanesine fırlatılıyor... Paket: {}", message.toString());
+    public void sendNotification(NotificationMessage notification) {
+        log.info("📢 Telsiz: Mesaj RabbitMQ postanesine fırlatılıyor... Tip: {}, Hedef: {}",
+                notification.getNotificationType(), notification.getDestination());
 
         // Zarfı al, üzerine "bank_exchange" santralini ve "notification_routing_key" adresini yaz, fırlat!
         rabbitTemplate.convertAndSend(
                 RabbitMQConfig.BANK_EXCHANGE,
                 RabbitMQConfig.NOTIFICATION_ROUTING_KEY,
-                message
+                notification // Artık JSON olarak gidecek!
         );
 
         log.info("✅ Zarf başarıyla postaneyle teslim edildi! (Kullanıcı bekletilmiyor)");

@@ -1,6 +1,7 @@
 package com.mustafa.service.impl;
 
-import com.mustafa.config.RabbitMQPublisher;
+import com.mustafa.dto.message.NotificationMessage;
+import com.mustafa.messaging.publisher.RabbitMQPublisher;
 import com.mustafa.dto.request.LoginRequest;
 import com.mustafa.dto.request.RegisterRequest;
 import com.mustafa.dto.response.AuthResponse;
@@ -100,7 +101,16 @@ public class AuthServiceImpl implements IAuthService {
         String jwtToken = jwtService.generateToken(appUser);
         log.info("Kayıt tamamlandı. {} için JWT Token üretildi.", maskedId);
 
-        rabbitPublisher.sendNotification("SİSTEME YENİ KAYIT | Kimlik: " + maskedId + " | Rol: " + request.getRole());
+        // YENİ HALİ: Hoş Geldin DTO'su
+        NotificationMessage welcomeMessage = NotificationMessage.builder()
+                .destination(request.getEmail())
+                .subject("Bankamıza Hoş Geldiniz")
+                .content(String.format("Sayın kullanıcımız, %s rolü ile sisteme kayıt başvurunuz alınmıştır. Hesabınız yönetici tarafından onaylandığında tüm bankacılık işlemlerinizi gerçekleştirebileceksiniz.", request.getRole()))
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
+
+        rabbitPublisher.sendNotification(welcomeMessage);
 
         return AuthResponse.builder().token(jwtToken).message("Kayıt işlemi başarıyla gerçekleşti.").build();
     }
@@ -116,11 +126,18 @@ public class AuthServiceImpl implements IAuthService {
                     new UsernamePasswordAuthenticationToken(request.getIdentityNumber(), request.getPassword())
             );
         } catch (org.springframework.security.core.AuthenticationException e) {
-            // 🚀 İŞTE YENİ İSTİHBARAT AĞIMIZ: Yanlış şifre denendiğinde burası ötecek!
             log.warn("🚨 Başarısız giriş denemesi! Hatalı şifre. Kimlik: {}", maskedId);
 
-            // Bu mesajı dinleyen servis anında müşteriye "Hesabınıza girmeye çalıştılar" diye mail atabilir.
-            rabbitPublisher.sendNotification("GÜVENLİK ALARMI! | Başarısız giriş denemesi | Kimlik: " + maskedId);
+            // YENİ HALİ: Başarısız Giriş Güvenlik Alarmı DTO'su
+            NotificationMessage failedLoginAlert = NotificationMessage.builder()
+                    .destination(request.getIdentityNumber()) // SMS için kimlik veya tel no
+                    .subject("🚨 Güvenlik Alarmı: Başarısız Giriş Denemesi")
+                    .content("Hesabınıza az önce hatalı şifre ile giriş yapılmaya çalışıldı. Eğer bu işlemi siz yapmadıysanız acilen müşteri hizmetlerini arayınız!")
+                    .identityNumber(maskedId)
+                    .notificationType(NotificationMessage.NotificationType.SMS) // Acil durum!
+                    .build();
+
+            rabbitPublisher.sendNotification(failedLoginAlert);
 
             throw new BankOperationException("Kimlik numarası veya şifre hatalı!");
         }
@@ -134,8 +151,16 @@ public class AuthServiceImpl implements IAuthService {
         String jwtToken = jwtService.generateToken(appUser);
         log.info("Giriş başarılı. {} kimlikli kullanıcı sisteme giriş yaptı.", maskedId);
 
-        rabbitPublisher.sendNotification("SİSTEME GİRİŞ YAPILDI | Kimlik: " + maskedId);
+// YENİ HALİ: Başarılı Giriş Bildirimi DTO'su
+        NotificationMessage loginMessage = NotificationMessage.builder()
+                .destination(request.getIdentityNumber())
+                .subject("Hesabınıza Giriş Yapıldı")
+                .content("Bankacılık sistemine an itibariyle başarılı bir giriş yaptınız. İşlemi siz yapmadıysanız hemen şifrenizi değiştirin.")
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.PUSH_NOTIFICATION) // Mobil bildirim
+                .build();
 
+        rabbitPublisher.sendNotification(loginMessage);
         return AuthResponse.builder().token(jwtToken).message("Giriş başarılı.").build();
     }
 }

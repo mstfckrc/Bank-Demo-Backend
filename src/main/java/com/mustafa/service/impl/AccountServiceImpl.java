@@ -1,6 +1,7 @@
 package com.mustafa.service.impl;
 
-import com.mustafa.config.RabbitMQPublisher;
+import com.mustafa.dto.message.NotificationMessage;
+import com.mustafa.messaging.publisher.RabbitMQPublisher;
 import com.mustafa.dto.request.CreateAccountRequest;
 import com.mustafa.dto.response.AccountResponse;
 import com.mustafa.entity.Account;
@@ -92,9 +93,17 @@ public class AccountServiceImpl implements IAccountService {
         log.info("Hesap başarıyla oluşturuldu. Hesap No: {}, IBAN: {}, Sahibi: {}", accountNumber, iban, maskedId);
 
         // Müşteriye "Hesabınız açıldı" maili/SMS'i atılması için arka plana iş bırakıyoruz.
-        String message = "YENİ HESAP BİLDİRİMİ | Hesap No: " + accountNumber + " | Kullanıcı: " + maskedId;
-        rabbitPublisher.sendNotification(message);
+// YENİ HALİ: Yeni Kasa Açılış DTO'su
+        NotificationMessage openAccountMessage = NotificationMessage.builder()
+                .destination(currentUser.getIdentityNumber()) // İleride e-posta servisine bağlanabilir
+                .subject("🎉 Yeni Banka Hesabınız Açıldı")
+                .content(String.format("Sayın kullanıcımız, bankamız nezdinde %s döviz cinsinden %s numaralı (IBAN: %s) yeni hesabınız başarıyla açılmıştır. İyi günlerde kullanın.",
+                        request.getCurrency(), accountNumber, iban))
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
 
+        rabbitPublisher.sendNotification(openAccountMessage);
         return mapToResponse(savedAccount);
     }
 
@@ -167,10 +176,17 @@ public class AccountServiceImpl implements IAccountService {
         accountRepository.save(account);
         log.info("Hesap başarıyla pasife alındı (Kapatıldı). Hesap No: {}", accountNumber);
 
-        // Müşteriye "Hesabınız güvenlik/istek sebebiyle kapatıldı" bilgisini arka planda yollatıyoruz.
-        String closeMessage = "HESAP KAPATMA BİLDİRİMİ | Hesap No: " + accountNumber + " | Kullanıcı: " + maskedId;
-        rabbitPublisher.sendNotification(closeMessage);
-    }
+        // YENİ HALİ: Hesap Kapatma DTO'su
+        NotificationMessage closeAccountMessage = NotificationMessage.builder()
+                .destination(currentUser.getIdentityNumber())
+                .subject("Hesap Kapatma İşlemi Başarılı")
+                .content(String.format("Bankamızdaki %s numaralı %s hesabınız isteğiniz üzerine / güvenlik kuralları gereği başarıyla kapatılmış (pasife alınmış) durumdadır.",
+                        accountNumber, account.getCurrency()))
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.EMAIL) // veya SMS
+                .build();
+
+        rabbitPublisher.sendNotification(closeAccountMessage);}
 
     private AccountResponse mapToResponse(Account account) {
         return AccountResponse.builder()

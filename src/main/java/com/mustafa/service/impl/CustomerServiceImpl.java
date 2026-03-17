@@ -1,6 +1,7 @@
 package com.mustafa.service.impl;
 
-import com.mustafa.config.RabbitMQPublisher;
+import com.mustafa.dto.message.NotificationMessage;
+import com.mustafa.messaging.publisher.RabbitMQPublisher;
 import com.mustafa.dto.request.ChangePasswordRequest;
 import com.mustafa.dto.request.UpdateProfileRequest;
 import com.mustafa.dto.response.UserProfileResponse;
@@ -97,8 +98,15 @@ public class CustomerServiceImpl implements ICustomerService {
 
         log.info("Profil başarıyla güncellendi. Kullanıcı: {}", maskedId);
 
-        rabbitPublisher.sendNotification("PROFİL GÜNCELLENDİ | Kimlik: " + maskedId + " | Yeni İletişim: " + email);
+        NotificationMessage profileMessage = NotificationMessage.builder()
+                .destination(email) // Müşterinin yeni e-posta adresi
+                .subject("Profil Bilgileriniz Güncellendi")
+                .content("Müşteri profil bilgileriniz başarıyla güncellenmiştir. Yeni iletişim adresiniz: " + email)
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
 
+        rabbitPublisher.sendNotification(profileMessage);
         return UserProfileResponse.builder()
                 .identityNumber(appUser.getIdentityNumber())
                 .profileName(profileName)
@@ -126,8 +134,17 @@ public class CustomerServiceImpl implements ICustomerService {
 
         appUser.setPassword(passwordEncoder.encode(request.getNewPassword()));
         appUserRepository.save(appUser);
-        log.info("Şifre başarıyla güncellendi (Dijital kasa kilitleri yenilendi). Kullanıcı: {}", maskedId);
-        rabbitPublisher.sendNotification("GÜVENLİK UYARISI: Şifre Değiştirildi! | Kimlik: " + maskedId);
+
+        // YENİ HALİ: Siber Güvenlik Alarm DTO'su
+        NotificationMessage securityMessage = NotificationMessage.builder()
+                .destination(appUser.getIdentityNumber()) // SMS atılacağı için hedef olarak kimlik no veya telefon verilebilir
+                .subject("🚨 Güvenlik Uyarısı: Şifreniz Değiştirildi")
+                .content("Dijital bankacılık şifreniz az önce değiştirildi. Bu işlemi siz gerçekleştirmediyseniz lütfen acilen müşteri hizmetlerimizle iletişime geçiniz!")
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.SMS) // Acil durum olduğu için SMS!
+                .build();
+
+        rabbitPublisher.sendNotification(securityMessage);
     }
 
     @Override
@@ -176,6 +193,15 @@ public class CustomerServiceImpl implements ICustomerService {
         appUser.setStatus(AppUser.ApprovalStatus.PENDING);
         appUserRepository.save(appUser);
         log.info("Yeniden değerlendirme talebi başarıyla işleme alındı. Durum PENDING yapıldı. Kullanıcı: {}", maskedId);
-        rabbitPublisher.sendNotification("HESAP ONAY İTİRAZI (APPEAL) | Kimlik: " + maskedId + " hesabının yeniden incelenmesini talep ediyor.");
+        // YENİ HALİ: Admin İtiraz (Appeal) DTO'su
+        NotificationMessage appealMessage = NotificationMessage.builder()
+                .destination("admin@bank.com") // Doğrudan admin yetkilisine gidiyor
+                .subject("Yeni Hesap Onay İtirazı (Appeal)")
+                .content(String.format("Dikkat: %s kimlik numaralı müşteri, reddedilen hesabı için yeniden değerlendirme talep etmektedir. Lütfen paneli kontrol edin.", maskedId))
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.SYSTEM_ALERT) // Sistem Alarmı
+                .build();
+
+        rabbitPublisher.sendNotification(appealMessage);
     }
 }

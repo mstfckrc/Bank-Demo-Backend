@@ -1,6 +1,7 @@
 package com.mustafa.service.impl;
 
-import com.mustafa.config.RabbitMQPublisher;
+import com.mustafa.dto.message.NotificationMessage;
+import com.mustafa.messaging.publisher.RabbitMQPublisher;
 import com.mustafa.dto.request.*;
 import com.mustafa.dto.response.AutoPaymentSettingsResponse;
 import com.mustafa.dto.response.CompanyEmployeeResponse;
@@ -92,7 +93,19 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
         CompanyEmployee savedEmployee = companyEmployeeRepository.save(newEmployee);
         log.info("İşe alım başarılı! Personel ({}), {} şirketine eklendi.", maskedEmployeeId, company.getCompanyName());
-        rabbitPublisher.sendNotification("YENİ PERSONEL İŞE ALINDI | Şirket: " + company.getCompanyName() + " | Personel: " + maskedEmployeeId);
+
+        // YENİ HALİ: İşe Alım DTO'su
+        NotificationMessage hireMessage = NotificationMessage.builder()
+                .destination(company.getContactEmail()) // Şirketin yetkili e-postasına gidiyor
+                .subject("Yeni Personel İşe Alım Onayı")
+                .content(String.format("Şirketinize (%s) %s kimlik numaralı personel başarıyla kaydedilmiştir.",
+                        company.getCompanyName(), maskedEmployeeId))
+                .identityNumber(maskedManagerId)
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
+
+        rabbitPublisher.sendNotification(hireMessage);
+
         return mapToResponse(savedEmployee);
     }
 
@@ -162,7 +175,18 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
         companyEmployeeRepository.delete(employeeRecord);
         log.info("Personel ({}) başarıyla şirketten çıkarıldı.", maskedEmployeeId);
-        rabbitPublisher.sendNotification("PERSONEL İŞTEN ÇIKIŞI | Şirket: " + company.getCompanyName() + " | Personel: " + maskedEmployeeId);
+
+        // YENİ HALİ: İşten Çıkış DTO'su
+        NotificationMessage removeMessage = NotificationMessage.builder()
+                .destination(company.getContactEmail())
+                .subject("Personel Çıkış İşlemi")
+                .content(String.format("Şirketinizden (%s), %s kimlik numaralı personelin kaydı başarıyla silinmiştir.",
+                        company.getCompanyName(), maskedEmployeeId))
+                .identityNumber(maskIdentity(managerIdentityNumber))
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
+
+        rabbitPublisher.sendNotification(removeMessage);
     }
 
     // 1️⃣ KULLANICI KAPISI (Manuel Tetikleme)
@@ -283,7 +307,19 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
         }
 
         log.info("✅ Toplu maaş dağıtımı KUSURSUZ tamamlandı. Toplam Aktarılan: {} TRY", totalSalaryInTry);
-        rabbitPublisher.sendNotification("TOPLU MAAŞ DAĞITIMI TAMAMLANDI | Şirket: " + company.getCompanyName() + " | Toplam Aktarılan: " + totalSalaryInTry + " TRY");
+
+        // YENİ HALİ: Toplu Maaş Raporu DTO'su
+        NotificationMessage salaryReportMessage = NotificationMessage.builder()
+                .destination(company.getContactEmail())
+                .subject("✅ Toplu Maaş Dağıtımı Tamamlandı")
+                .content(String.format("%s şirketinizin %d personeli için toplam %s TRY maaş dağıtım işlemi kusursuz bir şekilde tamamlanmıştır.",
+                        company.getCompanyName(), employees.size(), totalSalaryInTry))
+                .identityNumber(maskIdentity(company.getAppUser().getIdentityNumber()))
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
+
+        rabbitPublisher.sendNotification(salaryReportMessage);
+
         return transactionResults;
     }
 
@@ -327,8 +363,19 @@ public class CompanyEmployeeServiceImpl implements ICompanyEmployeeService {
 
         log.info("✅ Şirket ({}) otomatik maaş ayarları kaydedildi. Aktif mi: {}, Gün: {}, Kasa: {}",
                 company.getCompanyName(), request.isAutoPaymentEnabled(), request.getPaymentDay(), request.getDefaultSalaryIban());
-        rabbitPublisher.sendNotification("OTOMATİK MAAŞ AYARLARI GÜNCELLENDİ | Şirket: " + company.getCompanyName() + " | Aktif: " + request.isAutoPaymentEnabled());
-        // 🚀 DÜZELTME: Artık jilet gibi bir Response objesi dönüyoruz!
+
+        // YENİ HALİ: Ayar Güncelleme DTO'su
+        NotificationMessage settingsMessage = NotificationMessage.builder()
+                .destination(company.getContactEmail())
+                .subject("Otomatik Maaş Ayarları Güncellendi")
+                .content(String.format("%s şirketinizin otomatik maaş ödeme ayarları güncellenmiştir. Aktiflik Durumu: %b",
+                        company.getCompanyName(), request.isAutoPaymentEnabled()))
+                .identityNumber(maskIdentity(managerIdentityNumber))
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
+
+        rabbitPublisher.sendNotification(settingsMessage);
+
         return AutoPaymentSettingsResponse.builder()
                 .autoPaymentEnabled(company.isAutoSalaryPaymentEnabled())
                 .paymentDay(company.getSalaryPaymentDay())

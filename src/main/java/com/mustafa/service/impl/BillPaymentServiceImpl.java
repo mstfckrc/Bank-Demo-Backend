@@ -1,6 +1,7 @@
 package com.mustafa.service.impl;
 
-import com.mustafa.config.RabbitMQPublisher;
+import com.mustafa.dto.message.NotificationMessage;
+import com.mustafa.messaging.publisher.RabbitMQPublisher;
 import com.mustafa.dto.request.BillInstructionRequest;
 import com.mustafa.dto.response.BillInstructionResponse;
 import com.mustafa.dto.response.TransactionResponse;
@@ -106,7 +107,18 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
         log.info("🎉 FATURA ÖDENDİ: {} kasasından {} {} çekildi. (Abone: {})",
                 account.getAccountNumber(), String.format("%.2f", debtInAccountCurrency), account.getCurrency().name(), instruction.getSubscriberNo());
 
-        rabbitPublisher.sendNotification("FATURA ÖDENDİ | Tür: " + instruction.getBillType().name() + " | Abone: " + instruction.getSubscriberNo() + " | Tutar: " + debtInAccountCurrency + " " + account.getCurrency().name());
+
+        // YENİ HALİ: Fatura Ödeme DTO'su
+        NotificationMessage paymentMessage = NotificationMessage.builder()
+                .destination(account.getAppUser().getIdentityNumber()) // İleride müşterinin e-postası çekilebilir
+                .subject("✅ Faturanız Ödendi")
+                .content(String.format("%s türündeki %s numaralı aboneliğinize ait fatura (Tutar: %s %s), otomatik ödeme talimatınızla başarıyla ödenmiştir.",
+                        instruction.getBillType().name(), instruction.getSubscriberNo(), debtInAccountCurrency, account.getCurrency().name()))
+                .identityNumber(maskIdentity(account.getAppUser().getIdentityNumber()))
+                .notificationType(NotificationMessage.NotificationType.EMAIL) // veya PUSH_NOTIFICATION
+                .build();
+
+        rabbitPublisher.sendNotification(paymentMessage);
 
         // 🚀 DÜZELTME: Artık düzgün bir response dönüyoruz!
         return TransactionResponse.builder()
@@ -141,7 +153,18 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
 
         instructionRepository.save(instruction);
         log.info("Kullanıcı ({}) yeni fatura talimatı oluşturdu. Abone: {}", maskIdentity(identityNumber), request.getSubscriberNo());
-        rabbitPublisher.sendNotification("YENİ OTOMATİK ÖDEME TALİMATI | Tür: " + instruction.getBillType().name() + " | Abone: " + instruction.getSubscriberNo());
+
+        // YENİ HALİ: Yeni Talimat DTO'su
+        NotificationMessage instructionMessage = NotificationMessage.builder()
+                .destination(identityNumber)
+                .subject("Yeni Otomatik Ödeme Talimatı Kaydedildi")
+                .content(String.format("%s türündeki %s numaralı aboneliğiniz için otomatik ödeme talimatınız başarıyla oluşturulmuştur.",
+                        instruction.getBillType().name(), request.getSubscriberNo()))
+                .identityNumber(maskIdentity(identityNumber))
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
+
+        rabbitPublisher.sendNotification(instructionMessage);
 
         return mapToResponse(instruction);
     }
@@ -166,7 +189,18 @@ public class BillPaymentServiceImpl implements IBillPaymentService {
 
         instructionRepository.delete(instruction);
         log.info("Kullanıcı ({}) fatura talimatını (ID: {}) sildi.", maskIdentity(identityNumber), instructionId);
-        rabbitPublisher.sendNotification("TALİMAT İPTAL EDİLDİ | Talimat ID: " + instructionId + " | Kimlik: " + maskIdentity(identityNumber));
+
+        // YENİ HALİ: İptal DTO'su
+        NotificationMessage deleteMessage = NotificationMessage.builder()
+                .destination(identityNumber)
+                .subject("🚫 Otomatik Ödeme Talimatı İptali")
+                .content(String.format("Sistemimizde kayıtlı olan %d numaralı otomatik fatura ödeme talimatınız isteğiniz üzerine iptal edilmiştir.",
+                        instructionId))
+                .identityNumber(maskIdentity(identityNumber))
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
+
+        rabbitPublisher.sendNotification(deleteMessage);
     }
 
     private BillInstructionResponse mapToResponse(BillPaymentInstruction instruction) {

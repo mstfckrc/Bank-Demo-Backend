@@ -1,6 +1,7 @@
 package com.mustafa.service.impl;
 
-import com.mustafa.config.RabbitMQPublisher;
+import com.mustafa.dto.message.NotificationMessage;
+import com.mustafa.messaging.publisher.RabbitMQPublisher;
 import com.mustafa.dto.request.DepositRequest;
 import com.mustafa.dto.request.TransferRequest;
 import com.mustafa.dto.response.TransactionResponse;
@@ -88,7 +89,17 @@ public class TransactionServiceImpl implements ITransactionService {
 
         transactionRepository.save(transaction);
         log.info("✅ Para yatırma işlemi başarıyla tamamlandı. Referans: {}", transaction.getReferenceNo());
-        rabbitPublisher.sendNotification("HESABA PARA YATIRILDI | Hesap: " + request.getIban() + " | Tutar: " + request.getAmount() + " | Ref: " + transaction.getReferenceNo());
+
+        NotificationMessage notification = NotificationMessage.builder()
+                .destination(account.getAppUser().getIdentityNumber()) // Şimdilik kimlik no veriyoruz, ileride email çekilebilir
+                .subject("Hesaba Para Yatırma İşlemi")
+                .content(String.format("Hesabınıza (IBAN: %s) %s %s tutarında para yatırılmıştır. Ref: %s",
+                        request.getIban(), request.getAmount(), account.getCurrency(), transaction.getReferenceNo()))
+                .identityNumber(maskedId)
+                .notificationType(NotificationMessage.NotificationType.PUSH_NOTIFICATION) // Mobil bildirim tipi
+                .build();
+
+        rabbitPublisher.sendNotification(notification);
         return mapToResponse(transaction);
     }
 
@@ -164,7 +175,6 @@ public class TransactionServiceImpl implements ITransactionService {
         }
 
         // 3. MASAK KONTROLÜ VE İŞLEM TİPİ BELİRLEME
-        // 3. MASAK KONTROLÜ VE İŞLEM TİPİ BELİRLEME
         Transaction.TransactionStatus status;
 
         // 🚀 DÜZELTME: Eğer para zaten TRY ise döviz motorunu hiç yorma, değilse çevir!
@@ -216,11 +226,28 @@ public class TransactionServiceImpl implements ITransactionService {
         log.info("✅ İşlem kaydı başarıyla oluşturuldu. Durum: {}, Referans: {}", status, transaction.getReferenceNo());
 
         if (status == Transaction.TransactionStatus.PENDING_APPROVAL) {
-            // Adminlere acil MASAK bildirimi gidiyor!
-            rabbitPublisher.sendNotification("🚨 MASAK ONAYI BEKLİYOR | Yüklü Transfer Denemesi! Gönderen: " + request.getSenderIban() + " | Tutar: " + request.getAmount() + " | Ref: " + transaction.getReferenceNo());
+            // Adminlere Kırmızı Alarm!
+            NotificationMessage alertMessage = NotificationMessage.builder()
+                    .destination("admin@bank.com") // Sistem yöneticisine gidiyor
+                    .subject("🚨 DİKKAT: MASAK LİMİTİ AŞILDI")
+                    .content(String.format("Yüklü işlem onayı bekliyor! Gönderen: %s, Tutar: %s, Ref: %s",
+                            request.getSenderIban(), request.getAmount(), transaction.getReferenceNo()))
+                    .identityNumber(maskedId)
+                    .notificationType(NotificationMessage.NotificationType.SYSTEM_ALERT)
+                    .build();
+            rabbitPublisher.sendNotification(alertMessage);
+
         } else {
-            // Normal transfer, müşteriye ve alıcıya bildirim gidiyor
-            rabbitPublisher.sendNotification("TRANSFER BAŞARILI | Gönderen: " + request.getSenderIban() + " | Alıcı: " + request.getReceiverIban() + " | Tutar: " + request.getAmount());
+            // Müşteriye Normal Bilgilendirme
+            NotificationMessage successMessage = NotificationMessage.builder()
+                    .destination(senderAccount.getAppUser().getIdentityNumber())
+                    .subject("Para Transferi Başarılı")
+                    .content(String.format("Alıcıya (%s) %s %s tutarındaki transferiniz başarıyla gerçekleşti.",
+                            request.getReceiverIban(), request.getAmount(), senderAccount.getCurrency()))
+                    .identityNumber(maskedId)
+                    .notificationType(NotificationMessage.NotificationType.EMAIL)
+                    .build();
+            rabbitPublisher.sendNotification(successMessage);
         }
 
         return mapToResponse(transaction);
@@ -305,7 +332,16 @@ public class TransactionServiceImpl implements ITransactionService {
         transactionRepository.save(transaction);
 
         log.info("✅ Admin İşlemi Başarılı: İşlem ({}) ONAYLANDI ve para alıcı hesaba geçirildi.", referenceNo);
-        rabbitPublisher.sendNotification("TRANSFER ONAYLANDI | Bekleyen işleminiz yönetici tarafından onaylanmış ve alıcıya ulaşmıştır. Ref: " + referenceNo);
+
+        NotificationMessage approvalMessage = NotificationMessage.builder()
+                .destination(transaction.getSenderAccount().getAppUser().getIdentityNumber())
+                .subject("✅ İşleminiz Onaylandı")
+                .content("Bekleyen yüklü transfer işleminiz yönetici tarafından onaylanmış ve alıcıya ulaşmıştır. Ref: " + referenceNo)
+                .identityNumber(maskIdentity(transaction.getSenderAccount().getAppUser().getIdentityNumber()))
+                .notificationType(NotificationMessage.NotificationType.EMAIL)
+                .build();
+
+        rabbitPublisher.sendNotification(approvalMessage);
         return mapToResponse(transaction);
     }
 
@@ -336,7 +372,17 @@ public class TransactionServiceImpl implements ITransactionService {
         transactionRepository.save(transaction);
 
         log.info("🚫 Admin İşlemi Başarılı: İşlem ({}) REDDEDİLDİ ve dondurulan tutar göndericiye iade edildi.", referenceNo);
-        rabbitPublisher.sendNotification("TRANSFER REDDEDİLDİ 🚫 | Bekleyen işleminiz MASAK/Güvenlik kuralları gereği reddedilmiş olup, tutar hesabınıza iade edilmiştir. Ref: " + referenceNo);
+
+        NotificationMessage rejectMessage = NotificationMessage.builder()
+                .destination(transaction.getSenderAccount().getAppUser().getIdentityNumber())
+                .subject("🚫 İşleminiz Reddedildi")
+                .content("Bekleyen işleminiz MASAK/Güvenlik kuralları gereği reddedilmiş olup, tutar kasanıza iade edilmiştir. Ref: " + referenceNo)
+                .identityNumber(maskIdentity(transaction.getSenderAccount().getAppUser().getIdentityNumber()))
+                .notificationType(NotificationMessage.NotificationType.SYSTEM_ALERT) // Veya EMAIL
+                .build();
+
+        rabbitPublisher.sendNotification(rejectMessage);
+
         return mapToResponse(transaction);
     }
 
